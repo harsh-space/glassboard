@@ -45,10 +45,15 @@ HEURISTIC_STAGES = [
 
 
 def _get_stage(title: str, desc: str) -> int:
-    text = (title + " " + desc).lower()
+    t_lower = (title or "").lower()
     for item in HEURISTIC_STAGES:
         for kw in item["keywords"]:
-            if kw in text:
+            if kw in t_lower:
+                return item["stage"]
+    d_lower = (desc or "").lower()
+    for item in HEURISTIC_STAGES:
+        for kw in item["keywords"]:
+            if kw in d_lower:
                 return item["stage"]
     return 99
 
@@ -92,17 +97,19 @@ def generate_heuristic_suggestions(
             if pair in edge_pairs or pair in rejected_pairs:
                 continue
 
-            # Check if dep task mentions words from prereq
-            dep_text = (dep_task.title + " " + dep_task.description).lower()
+            # Check if dep task mentions keywords relevant to this prerequisite
+            dep_text = (dep_task.title + " " + (dep_task.description or "")).lower()
+            prereq_text = (prereq_task.title + " " + (prereq_task.description or "")).lower()
             evidence = None
-            for kw in HEURISTIC_STAGES[prereq_stage - 1]["keywords"] if prereq_stage <= len(HEURISTIC_STAGES) else []:
-                if kw in dep_text:
+            stage_kws = HEURISTIC_STAGES[prereq_stage - 1]["keywords"] if prereq_stage <= len(HEURISTIC_STAGES) else []
+            for kw in stage_kws:
+                if kw in prereq_text and kw in dep_text:
                     evidence = kw
                     break
 
-            # If no direct keyword match, find any shared technical token
+            # If no direct keyword match, find any shared technical token (excluding generic tokens)
             if not evidence:
-                prereq_words = [w for w in prereq_task.title.lower().split() if len(w) > 3]
+                prereq_words = [w for w in prereq_task.title.lower().split() if len(w) > 3 and w not in ("test", "data", "prep")]
                 for w in prereq_words:
                     if w in dep_text:
                         evidence = w

@@ -59,7 +59,7 @@ FastAPI Backend (port 8000)
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/glassboard.git
+git clone https://github.com/harsh-space/glassboard.git
 cd glassboard
 
 # Set up Python virtual environment

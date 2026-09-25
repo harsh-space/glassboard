@@ -1,7 +1,7 @@
 # TaskFlow Pro — Progress Log
 
-Current Status: Phase 1 & Phase 2 Complete — Ready for Phase 3 (API & Board UI)
-Last Updated: 2026-09-25
+Current Status: Phase 8 Complete — Ready for Submission
+Last Updated: 2026-09-26
 
 ---
 
@@ -24,7 +24,7 @@ Last Updated: 2026-09-25
 - [x] Regression handling (`engine/derive.py` + `scheduler.py`).
 - [x] Invariant Gate (`engine/invariants.py`).
 - [x] Brute-force test oracle (`engine/oracle.py`).
-- [x] All tests pass (§8.1) — 17 tests total (15 in `tests/engine/`, 2 in `tests/api/`), including the 1,000 random graph oracle property test.
+- [x] All tests pass (§8.1) — 34 tests total (15 in `tests/engine/`, 19 in `tests/api/`), including the 1,000 random graph oracle property test.
 
 
 ### Phase 3 — API and Board UI (DONE)
@@ -69,7 +69,7 @@ Last Updated: 2026-09-25
 
 ## Escalated Decisions Log (BUILD_SPEC.md §10)
 1. **`actual_end` semantics**: Confirmed by user (2026-09-25) — set `actual_end = planned_end` when task is moved to Done.
-2. **Submission branch name**: Confirmed by user (2026-09-25) — develop on `main`; submission branch will be designated later.
+2. **Submission branch name**: Confirmed by user (2026-09-25) — `main` is final.
 3. **LLM provider**: Confirmed by user (2026-09-25) — Groq API with `allam-2-7b`.
 4. **Deployment target**: [PROPOSED] SQLite locally, PostgreSQL on managed platform (Render / Fly / Railway) — awaiting decision before final deployment.
 
@@ -77,7 +77,7 @@ Last Updated: 2026-09-25
 
 ## Current Activity
 - Configured Groq API integration with model `allam-2-7b` in `backend/ai/pipeline.py` and `.env.example`.
-- Verified 33/33 test suite passes; system operates with Groq LLM when key is provided, or heuristic fallback if unset.
+- Verified 34/34 test suite passes; system operates with Groq LLM when key is provided, or heuristic fallback if unset.
 
 
 

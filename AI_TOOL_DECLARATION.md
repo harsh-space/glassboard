@@ -63,6 +63,14 @@ Model/provider used: **Groq API** running **`allam-2-7b`** (with automatic keywo
 | 2026-09-25 | `README.md` | Judge-facing project documentation, quick start, architecture, and demo guide | [x] | [x] |
 | 2026-09-25 | `docs/DEMO_SCRIPT.md` | 5-minute hackathon judge walkthrough script covering all five core capabilities | [x] | [x] |
 | 2026-09-25 | `docs/TESTING_SCENARIOS.md` | Interactive UI/UX and functionality testing scenarios guide | [x] | [x] |
+| 2026-09-26 | `frontend/src/App.tsx` | UI styling, layout adjustments, header simplification, and drag-and-drop polish | [x] | [x] |
+| 2026-09-26 | `frontend/src/components/KanbanColumn.tsx` | Column layout refinement, scrollbar customization, and visual hierarchy | [x] | [x] |
+| 2026-09-26 | `frontend/src/components/TaskCard.tsx` | Task box styling, rounded corner aesthetics, and badge alignment | [x] | [x] |
+| 2026-09-26 | `frontend/src/components/TaskDetailModal.tsx` | Modal sizing, description textarea layout, minimum width constraints, and scrollbar polish | [x] | [x] |
+| 2026-09-26 | `frontend/src/components/NewTaskModal.tsx` | Modal max-height constraint, description box sizing, and visual consistency | [x] | [x] |
+| 2026-09-26 | `frontend/src/components/RippleToast.tsx` | Color scheme and theme consistency with global glassmorphic design | [x] | [x] |
+| 2026-09-26 | `frontend/src/index.css` | Custom dark-theme scrollbars, layout fixes, and component styling polish | [x] | [x] |
+| 2026-09-26 | `frontend/src/api.ts` | API client connection endpoints and request handling | [x] | [x] |
 
 
 
