@@ -41,6 +41,8 @@ export const App: React.FC = () => {
 
   const [downstreamChanges, setDownstreamChanges] = useState<DownstreamChange[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Track tasks that failed an invariant check so we can show a label on the card
+  const [invariantTaskIds, setInvariantTaskIds] = useState<number[]>([]);
 
   // Setup dnd-kit sensors with activation constraint
   const sensors = useSensors(
@@ -156,7 +158,14 @@ export const App: React.FC = () => {
       // Rollback optimistic state immediately
       setBoard(previousBoard);
 
-      if (err instanceof ApiRequestError) {
+      if (err instanceof ApiRequestError && err.code === "INVARIANT_VIOLATION") {
+        // Show inline label on the task card instead of a global banner
+        setInvariantTaskIds((prev) => [...prev.filter((id) => id !== taskId), taskId]);
+        // Auto-clear after 4s
+        setTimeout(() => {
+          setInvariantTaskIds((prev) => prev.filter((id) => id !== taskId));
+        }, 4000);
+      } else if (err instanceof ApiRequestError) {
         setErrorMessage(err.message);
       } else {
         setErrorMessage(err.message || "Failed to move task");
@@ -223,7 +232,7 @@ export const App: React.FC = () => {
             </span>
           </div>
           <div style={{ fontSize: "13px", color: "var(--color-muted)", marginTop: "2px" }}>
-            {board?.name} • Anchor Date: {board?.start_date}
+            Anchor Date: {board?.start_date}
           </div>
         </div>
 
@@ -305,7 +314,7 @@ export const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Visible Error Banner for Invalid Drags (BUILD_SPEC.md §6 / §7) */}
+      {/* Visible Error Banner for non-invariant drag errors (BUILD_SPEC.md §6 / §7) */}
       {errorMessage && (
         <div
           style={{
@@ -359,6 +368,7 @@ export const App: React.FC = () => {
                   tasks={colTasks}
                   allTasks={board?.tasks || []}
                   criticalPathIds={criticalPathIds}
+                  invariantTaskIds={invariantTaskIds}
                   onCardClick={(task) => setSelectedTask(task)}
                 />
               );
@@ -378,26 +388,59 @@ export const App: React.FC = () => {
         </DndContext>
       </main>
 
-      {/* Task Detail Modal */}
-      <TaskDetailModal
-        task={selectedTask}
-        allTasks={board?.tasks || []}
-        dependencies={board?.dependencies || []}
-        onClose={() => setSelectedTask(null)}
-        onTaskUpdated={(updatedTask, changes) => {
-          setSelectedTask(updatedTask);
-          loadBoard();
-          if (changes && changes.length > 0) {
-            setDownstreamChanges(changes);
-          }
-        }}
-        onTaskDeleted={() => {
-          loadBoard();
-        }}
-        onDependencyChanged={() => {
-          loadBoard();
-        }}
-      />
+      {/* Task Detail Modal + Ripple Effect side panel */}
+      {(selectedTask || downstreamChanges.length > 0) && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: selectedTask ? "rgba(20, 20, 19, 0.4)" : "transparent",
+            backdropFilter: selectedTask ? "blur(4px)" : "none",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "20px",
+            pointerEvents: selectedTask ? "auto" : "none",
+          }}
+          onClick={selectedTask ? () => setSelectedTask(null) : undefined}
+        >
+          <div style={{ display: "flex", gap: "16px", alignItems: "stretch", maxHeight: "90vh", pointerEvents: "auto" }}>
+            {/* Task Detail Modal */}
+            {selectedTask && (
+              <TaskDetailModal
+                task={selectedTask}
+                allTasks={board?.tasks || []}
+                dependencies={board?.dependencies || []}
+                onClose={() => setSelectedTask(null)}
+                onTaskUpdated={(updatedTask, changes) => {
+                  setSelectedTask(updatedTask);
+                  loadBoard();
+                  if (changes && changes.length > 0) {
+                    setDownstreamChanges(changes);
+                  }
+                }}
+                onTaskDeleted={() => {
+                  setSelectedTask(null);
+                  loadBoard();
+                }}
+                onDependencyChanged={() => {
+                  loadBoard();
+                }}
+              />
+            )}
+
+            {/* Ripple Effect side panel — same height as modal, right next to it */}
+            {downstreamChanges.length > 0 && (
+              <RippleToast
+                changes={downstreamChanges}
+                allTasks={board?.tasks || []}
+                onDismiss={() => setDownstreamChanges([])}
+              />
+            )}
+          </div>
+        </div>
+      )}
 
       {/* New Task Modal */}
       <NewTaskModal
@@ -423,13 +466,6 @@ export const App: React.FC = () => {
             setDownstreamChanges(changes);
           }
         }}
-      />
-
-      {/* Ripple Effect Toast */}
-      <RippleToast
-        changes={downstreamChanges}
-        allTasks={board?.tasks || []}
-        onDismiss={() => setDownstreamChanges([])}
       />
     </div>
   );

@@ -167,21 +167,9 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   };
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(20, 20, 19, 0.4)",
-        backdropFilter: "blur(4px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-        padding: "20px",
-      }}
-      onClick={onClose}
-    >
+    <>
       <div
+        className="modal-scroll"
         style={{
           background: "var(--color-surface-soft)",
           border: "1px solid var(--color-hairline)",
@@ -190,10 +178,12 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
           maxWidth: "680px",
           maxHeight: "90vh",
           overflowY: "auto",
+          overflowX: "hidden",
           boxShadow: "var(--shadow-lg)",
-          padding: "28px",
+          padding: "28px 24px 28px 28px",
           position: "relative",
           animation: "slideDown 0.2s ease-out",
+          boxSizing: "border-box",
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -289,6 +279,8 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
               onChange={(e) => setDescription(e.target.value)}
               style={{
                 width: "100%",
+                maxWidth: "100%",
+                minHeight: "80px",
                 padding: "8px 12px",
                 borderRadius: "var(--radius-sm)",
                 border: "1px solid var(--color-hairline)",
@@ -747,6 +739,6 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </>
   );
 };

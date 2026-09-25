@@ -72,12 +72,17 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
       onClick={onClose}
     >
       <div
+        className="modal-scroll"
         style={{
           background: "var(--color-surface-soft)",
           border: "1px solid var(--color-hairline)",
           borderRadius: "var(--radius-lg)",
           width: "100%",
           maxWidth: "520px",
+          maxHeight: "90vh",
+          overflowY: "auto",
+          overflowX: "hidden",
+          boxSizing: "border-box",
           padding: "24px",
           boxShadow: "var(--shadow-lg)",
           animation: "slideDown 0.2s ease-out",
@@ -143,11 +148,14 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
               onChange={(e) => setDescription(e.target.value)}
               style={{
                 width: "100%",
+                maxWidth: "100%",
+                minHeight: "80px",
                 padding: "8px 12px",
                 borderRadius: "var(--radius-sm)",
                 border: "1px solid var(--color-hairline)",
                 background: "var(--color-canvas)",
                 color: "var(--color-ink)",
+                resize: "vertical",
               }}
             />
           </div>

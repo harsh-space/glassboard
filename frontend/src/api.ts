@@ -31,11 +31,16 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const data = await response.json();
 
   if (!response.ok) {
-    const err = data.error || {
-      code: `HTTP_${response.status}`,
-      message: "An unexpected error occurred.",
-      details: {},
-    };
+    // FastAPI raises HTTPException with detail={code, message, details}
+    // Fall back to a generic format otherwise
+    const detail = data.detail || data.error;
+    const err = typeof detail === "object" && detail?.code
+      ? detail
+      : {
+          code: `HTTP_${response.status}`,
+          message: typeof detail === "string" ? detail : "An unexpected error occurred.",
+          details: {},
+        };
     throw new ApiRequestError(err.code, err.message, err.details);
   }
 

@@ -2,12 +2,13 @@ import React from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Task } from "../types";
-import { Clock, CheckCircle2, Lock, Sparkles } from "lucide-react";
+import { Clock, CheckCircle2, Lock, Sparkles, AlertTriangle } from "lucide-react";
 
 interface TaskCardProps {
   task: Task;
   allTasks: Task[];
   isCriticalPath?: boolean;
+  hasInvariantViolation?: boolean;
   onClick: (task: Task) => void;
 }
 
@@ -15,6 +16,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   task,
   allTasks,
   isCriticalPath,
+  hasInvariantViolation,
   onClick,
 }) => {
   const {
@@ -34,8 +36,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     transition,
     opacity: isDragging ? 0.4 : 1,
     zIndex: isDragging ? 999 : 1,
-    background: isCriticalPath ? "#fffdf9" : "var(--color-surface-card)",
-    border: isCriticalPath ? "1.5px solid var(--color-primary)" : "1px solid var(--color-hairline)",
+    background: hasInvariantViolation
+      ? "#fff8f0"
+      : isCriticalPath
+      ? "#fffdf9"
+      : "var(--color-surface-card)",
+    border: hasInvariantViolation
+      ? "1.5px solid #f59e0b"
+      : isCriticalPath
+      ? "1.5px solid var(--color-primary)"
+      : "1px solid var(--color-hairline)",
     borderRadius: "var(--radius-md)",
     padding: "14px 16px",
     marginBottom: "12px",
@@ -59,9 +69,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       className="task-card"
     >
 
-      {/* Header: ID, Critical path badge, Duration */}
+      {/* Header: ID, badges, Duration */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
           <span
             style={{
               fontSize: "12px",
@@ -75,7 +85,30 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           >
             T{task.id}
           </span>
-          {isCriticalPath && (
+
+          {/* Invariant violation inline label — shown right after TX */}
+          {hasInvariantViolation && (
+            <span
+              style={{
+                fontSize: "11px",
+                fontWeight: 600,
+                color: "#92400e",
+                background: "#fef3c7",
+                border: "1px solid #f59e0b",
+                padding: "2px 6px",
+                borderRadius: "var(--radius-pill)",
+                display: "flex",
+                alignItems: "center",
+                gap: "3px",
+                animation: "pulse 0.6s ease",
+              }}
+            >
+              <AlertTriangle size={11} />
+              Invariant
+            </span>
+          )}
+
+          {isCriticalPath && !hasInvariantViolation && (
             <span
               style={{
                 fontSize: "11px",
