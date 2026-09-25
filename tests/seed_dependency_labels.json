@@ -1,0 +1,19 @@
+{
+  "_comment": "Hand-labelled ground-truth dependency set for the canonical 10-task seed board (BUILD_SPEC.md §1 / §5.5). Each entry represents a true finish-to-start dependency. Used by scripts/measure_ai.py to compute precision, recall, and acceptance rate.",
+  "_note": "All 13 canonical edges from BUILD_SPEC.md §1 are the ground truth. The AI pipeline should propose at least the non-obvious ones (not just direct label chains); the measure script reports TP/FP/FN relative to this set.",
+  "true_dependencies": [
+    {"prerequisite_id": 1, "task_id": 2, "reason": "Requirements must be gathered before schema can be designed."},
+    {"prerequisite_id": 1, "task_id": 3, "reason": "Requirements must be gathered before wireframes can be drawn."},
+    {"prerequisite_id": 2, "task_id": 4, "reason": "Database schema must exist before backend API can be built against it."},
+    {"prerequisite_id": 2, "task_id": 5, "reason": "Database schema must exist before test data matching it can be prepared."},
+    {"prerequisite_id": 3, "task_id": 6, "reason": "UI wireframes must be approved before frontend implementation begins."},
+    {"prerequisite_id": 4, "task_id": 6, "reason": "Backend API must be built before the frontend can integrate against it."},
+    {"prerequisite_id": 4, "task_id": 7, "reason": "Backend API endpoints must exist before integration tests can run against them."},
+    {"prerequisite_id": 5, "task_id": 7, "reason": "Test data must be prepared before integration tests can use it."},
+    {"prerequisite_id": 4, "task_id": 8, "reason": "API endpoints must exist before their documentation can be written."},
+    {"prerequisite_id": 6, "task_id": 9, "reason": "Frontend implementation must be complete before deployment prep begins."},
+    {"prerequisite_id": 7, "task_id": 9, "reason": "Integration tests must pass before deployment prep begins."},
+    {"prerequisite_id": 8, "task_id": 10, "reason": "API documentation must be complete before release."},
+    {"prerequisite_id": 9, "task_id": 10, "reason": "Deployment prep must be complete before release."}
+  ]
+}

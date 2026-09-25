@@ -1,4 +1,8 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,8 +10,11 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from backend.routes.boards import router as boards_router
+from backend.routes.tasks import router as tasks_router
+from backend.routes.dependencies import router as dependencies_router
 
 app = FastAPI(title="TaskFlow Pro API", version="1.0.0")
+
 
 # CORS configuration: strict frontend origin only, never '*'
 FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
@@ -59,8 +66,11 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 # Mount routers under /api
 app.include_router(boards_router, prefix="/api")
+app.include_router(tasks_router, prefix="/api")
+app.include_router(dependencies_router, prefix="/api")
 
 
 @app.get("/api/health")
+
 def health_check():
     return {"status": "ok"}

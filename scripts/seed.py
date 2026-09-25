@@ -6,7 +6,7 @@ from datetime import date
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from backend.db import Base, engine, SessionLocal
-from backend.models import Board, Task, Dependency, TaskColumn
+from backend.models import Board, Task, Dependency, TaskColumn, AISuggestion, AuditLog
 from tests.seed_data import SEED_TASKS, SEED_DEPENDENCIES
 from engine.scheduler import recompute
 from engine.invariants import check_invariants
@@ -22,6 +22,8 @@ def seed_database(target_date: date | None = None) -> tuple[int, int, int]:
 
     try:
         # Clear existing data for fresh seed
+        db.query(AISuggestion).delete()
+        db.query(AuditLog).delete()
         db.query(Dependency).delete()
         db.query(Task).delete()
         db.query(Board).delete()

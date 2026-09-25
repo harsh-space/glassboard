@@ -82,3 +82,56 @@ def get_board(board_id: int, db: Session = Depends(get_db)):
         tasks=task_responses,
         dependencies=dep_responses,
     )
+
+
+@router.get("/{board_id}/critical-path")
+def get_critical_path(board_id: int, db: Session = Depends(get_db)):
+    board = db.query(Board).filter(Board.id == board_id).first()
+    if not board:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "BOARD_NOT_FOUND", "message": f"Board {board_id} not found."},
+        )
+
+    tasks = db.query(Task).filter(Task.board_id == board_id).all()
+    if not tasks:
+        return {"task_ids": [], "total_duration": 0}
+
+    task_ids = [t.id for t in tasks]
+    dependencies = db.query(Dependency).filter(Dependency.task_id.in_(task_ids)).all() if task_ids else []
+
+    from engine.scheduler import topological_sort
+    from engine.graph import prerequisites_of
+
+    all_ids = set(task_ids)
+    ordered_ids = topological_sort(all_ids, dependencies)
+    task_map = {t.id: t for t in tasks}
+
+    # Dynamic programming for longest path by duration
+    dist = {}
+    parent = {}
+
+    for t_id in ordered_ids:
+        t = task_map[t_id]
+        prereqs = prerequisites_of(t_id, dependencies)
+        if not prereqs:
+            dist[t_id] = t.duration_days
+            parent[t_id] = None
+        else:
+            best_p = max(prereqs, key=lambda p: dist.get(p, 0))
+            dist[t_id] = dist.get(best_p, 0) + t.duration_days
+            parent[t_id] = best_p
+
+    # Find overall end node with maximum path duration
+    end_task_id = max(ordered_ids, key=lambda tid: dist[tid])
+    total_duration = dist[end_task_id]
+
+    path = []
+    curr = end_task_id
+    while curr is not None:
+        path.append(curr)
+        curr = parent.get(curr)
+    path.reverse()
+
+    return {"task_ids": path, "total_duration": total_duration}
+

@@ -13,7 +13,7 @@ checks verify the survivors, and a human approves or rejects every link
 before it is written to the graph. The AI has no direct write path to the
 dependency graph.
 
-Model/provider used: _fill in once decided_.
+Model/provider used: **Groq API** running **`allam-2-7b`** (with automatic keyword heuristic fallback when key is not provided).
 
 ## 2. AI used during development of this repository
 
@@ -40,6 +40,29 @@ Model/provider used: _fill in once decided_.
 | 2026-09-25 | `tests/engine/test_blocked.py` | Tests for blocked/ready state derivation and advancing blocked tasks | [x] | [x] |
 | 2026-09-25 | `tests/engine/test_invariants.py` | Tests for Invariant Gate assertions (cycles, schedule, blocked advancement) | [x] | [x] |
 | 2026-09-25 | `tests/engine/test_oracle_property.py` | Property test: 1,000 random DAG mutations matching oracle from scratch | [x] | [x] |
+| 2026-09-25 | `backend/routes/tasks.py` | CRUD endpoints for tasks: create, update, move, delete, explanation, impact-preview | [x] | [x] |
+| 2026-09-25 | `backend/routes/dependencies.py` | CRUD + AI suggestions endpoints; cycle check integration; rate limiting | [x] | [x] |
+| 2026-09-25 | `backend/ai/pipeline.py` | Heuristic fallback generator (BUILD_SPEC.md §5.6) and BoardLockContext rate limiter | [x] | [x] |
+| 2026-09-25 | `frontend/src/App.tsx` | Root Kanban board: DndContext, drag handlers, optimistic updates, rollback | [x] | [x] |
+| 2026-09-25 | `frontend/src/api.ts` | Typed API client wrapping all backend endpoints | [x] | [x] |
+| 2026-09-25 | `frontend/src/types.ts` | TypeScript interfaces for Task, Board, Dependency, AISuggestion, etc. | [x] | [x] |
+| 2026-09-25 | `frontend/src/components/TaskCard.tsx` | Sortable task card with Blocked/Ready chip and blocking-prereq names | [x] | [x] |
+| 2026-09-25 | `frontend/src/components/KanbanColumn.tsx` | SortableContext column wrapper; droppable zone | [x] | [x] |
+| 2026-09-25 | `frontend/src/components/TaskDetailModal.tsx` | Task editor with Why Panel, dependency add/remove, impact preview | [x] | [x] |
+| 2026-09-25 | `frontend/src/components/NewTaskModal.tsx` | New task creation form | [x] | [x] |
+| 2026-09-25 | `frontend/src/components/AISuggestionsDrawer.tsx` | AI suggestions panel with accept/reject and heuristic badge | [x] | [x] |
+| 2026-09-25 | `frontend/src/components/RippleToast.tsx` | Downstream-change ripple notification | [x] | [x] |
+| 2026-09-25 | `tests/api/test_tasks.py` | API integration tests: CRUD, version conflict, move, explanation, impact-preview | [x] | [x] |
+| 2026-09-25 | `tests/api/test_dependencies.py` | API integration tests: cycle rejection, suggestions, accept/reject flow | [x] | [x] |
+| 2026-09-25 | `tests/api/test_boards.py` | API integration tests: board retrieval and derived fields | [x] | [x] |
+| 2026-09-25 | `tests/api/test_cors_and_errors.py` | CORS headers and Pydantic 400 error format tests | [x] | [x] |
+| 2026-09-25 | `tests/seed_dependency_labels.json` | Hand-labelled ground-truth dependency set for AI pipeline measurement (§5.5) | [x] | [x] |
+| 2026-09-25 | `scripts/measure_ai.py` | AI pipeline evaluation script: TP/FP/FN, precision, recall, F1, acceptance rate | [x] | [x] |
+| 2026-09-25 | `docs/ARCHITECTURE.md` | Architecture document written against what was actually built | [x] | [x] |
+| 2026-09-25 | `requirements.txt` | Python dependency specifications for clean installation | [x] | [x] |
+| 2026-09-25 | `README.md` | Judge-facing project documentation, quick start, architecture, and demo guide | [x] | [x] |
+| 2026-09-25 | `docs/DEMO_SCRIPT.md` | 5-minute hackathon judge walkthrough script covering all five core capabilities | [x] | [x] |
+| 2026-09-25 | `docs/TESTING_SCENARIOS.md` | Interactive UI/UX and functionality testing scenarios guide | [x] | [x] |
 
 
 
