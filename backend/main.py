@@ -9,18 +9,26 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from contextlib import asynccontextmanager
+from backend.db import Base, engine
 from backend.routes.boards import router as boards_router
 from backend.routes.tasks import router as tasks_router
 from backend.routes.dependencies import router as dependencies_router
 
-app = FastAPI(title="TaskFlow Pro API", version="1.0.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    Base.metadata.create_all(bind=engine)
+    yield
+
+app = FastAPI(title="TaskFlow Pro API", version="1.0.0", lifespan=lifespan)
 
 
-# CORS configuration: strict frontend origin only, never '*'
-FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
+# CORS configuration: support comma-separated origins (local dev + Vercel deployment)
+raw_origins = os.getenv("ALLOWED_ORIGIN", os.getenv("FRONTEND_ORIGIN", "http://localhost:5173"))
+allowed_origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_ORIGIN],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],

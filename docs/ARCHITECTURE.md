@@ -273,9 +273,10 @@ Per `BUILD_SPEC.md §8.3`:
 
 ## 9. Deployment status
 
-**Not deployed** — development environment only (SQLite local).
-Production deployment target not yet confirmed (escalated per
-`BUILD_SPEC.md §10`).
+**Architecture:**
+- **Database:** Neon Serverless PostgreSQL (pooler endpoint, SSL required).
+- **Backend API:** Render Web Service (`render.yaml` blueprint with Uvicorn / FastAPI).
+- **Frontend SPA:** Vercel (`frontend/vercel.json` SPA routing with Vite).
 
 To run locally:
 ```bash

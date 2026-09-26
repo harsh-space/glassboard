@@ -71,13 +71,14 @@ Last Updated: 2026-09-26
 1. **`actual_end` semantics**: Confirmed by user (2026-09-25) — set `actual_end = planned_end` when task is moved to Done.
 2. **Submission branch name**: Confirmed by user (2026-09-25) — `main` is final.
 3. **LLM provider**: Confirmed by user (2026-09-25) — Groq API with `allam-2-7b`.
-4. **Deployment target**: [PROPOSED] SQLite locally, PostgreSQL on managed platform (Render / Fly / Railway) — awaiting decision before final deployment.
+4. **Deployment target**: Confirmed by user (2026-09-26) — Neon (PostgreSQL), Render (FastAPI backend), Vercel (React frontend).
 
 ---
 
 ## Current Activity
-- Configured Groq API integration with model `allam-2-7b` in `backend/ai/pipeline.py` and `.env.example`.
-- Verified 34/34 test suite passes; system operates with Groq LLM when key is provided, or heuristic fallback if unset.
+- Connected to live Neon PostgreSQL database and successfully seeded canonical board, tasks, and dependencies.
+- Verified all 34 tests pass against Neon PostgreSQL.
+- Prepared `render.yaml` for Render backend deployment and `frontend/vercel.json` for Vercel frontend deployment.
 
 
 
