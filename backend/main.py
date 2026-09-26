@@ -22,10 +22,26 @@ import backend.models  # noqa: F401  (registers User, Board, Task, Dependency, e
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from sqlalchemy import text
+    from backend.db import SessionLocal
+
+    # Create all tables (safe, skips existing)
     Base.metadata.create_all(bind=engine)
+
+    # Explicit migration: ensure owner_id column exists on board table
+    # (handles Neon instances upgraded from pre-auth schema)
+    try:
+        db = SessionLocal()
+        db.execute(text(
+            "ALTER TABLE board ADD COLUMN IF NOT EXISTS owner_id INTEGER REFERENCES \"user\"(id) ON DELETE CASCADE"
+        ))
+        db.commit()
+        db.close()
+    except Exception:
+        pass
+
     # Auto-seed canonical board if database is fresh/empty
     try:
-        from backend.db import SessionLocal
         from backend.models import Board
         from scripts.seed import seed_database
         db = SessionLocal()
@@ -35,6 +51,7 @@ async def lifespan(app: FastAPI):
     except Exception:
         pass
     yield
+
 
 app = FastAPI(title="TaskFlow Pro API", version="1.0.0", lifespan=lifespan)
 
