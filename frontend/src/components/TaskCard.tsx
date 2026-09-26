@@ -2,14 +2,12 @@ import React from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Task } from "../types";
-import { Clock, CheckCircle2, Lock, Sparkles, AlertTriangle } from "lucide-react";
+import { Clock, CheckCircle2, Lock, Sparkles } from "lucide-react";
 
 interface TaskCardProps {
   task: Task;
   allTasks: Task[];
   isCriticalPath?: boolean;
-  hasInvariantViolation?: boolean;
-  invariantAffectedTaskIds?: number[];
   onClick: (task: Task) => void;
 }
 
@@ -17,8 +15,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   task,
   allTasks,
   isCriticalPath,
-  hasInvariantViolation,
-  invariantAffectedTaskIds = [],
   onClick,
 }) => {
   const {
@@ -38,10 +34,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     transition,
     opacity: isDragging ? 0.4 : 1,
     zIndex: isDragging ? 999 : 1,
-    background: isCriticalPath && !hasInvariantViolation
+    background: isCriticalPath
       ? "#fffdf9"
       : "var(--color-surface-card)",
-    border: isCriticalPath && !hasInvariantViolation
+    border: isCriticalPath
       ? "1.5px solid var(--color-primary)"
       : "1px solid var(--color-hairline)",
     borderRadius: "var(--radius-md)",
@@ -75,8 +71,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       onClick={() => onClick(task)}
       className="task-card"
     >
-
-      {/* ── Row 1: T# chip + invariant/critical badges ── */}
+      {/* ── Row 1: T# chip + critical badge ── */}
       <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginBottom: "8px" }}>
         {/* Task ID */}
         <span
@@ -89,40 +84,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           T{task.id}
         </span>
 
-        {/* Invariant chip + inline task reason */}
-        {hasInvariantViolation && (
-          <>
-            <span
-              style={{
-                ...chipBase,
-                color: "#b91c1c",
-                background: "rgba(220,38,38,0.08)",
-                border: "1px solid rgba(220,38,38,0.25)",
-                display: "flex",
-                alignItems: "center",
-                gap: "3px",
-              }}
-            >
-              <AlertTriangle size={11} />
-              Invariant
-            </span>
-            {invariantAffectedTaskIds.length > 0 && (
-              <span
-                style={{
-                  fontSize: "11px",
-                  color: "#b91c1c",
-                  opacity: 0.75,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {invariantAffectedTaskIds.map((id) => `T${id}`).join(", ")} blocked
-              </span>
-            )}
-          </>
-        )}
-
         {/* Critical Path chip */}
-        {isCriticalPath && !hasInvariantViolation && (
+        {isCriticalPath && (
           <span
             style={{
               ...chipBase,
@@ -138,8 +101,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </span>
         )}
       </div>
-
-
 
       {/* ── Title ── */}
       <div

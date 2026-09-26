@@ -25,9 +25,32 @@ import { RippleToast } from "./components/RippleToast";
 import { LoginScreen } from "./components/LoginScreen";
 import { BoardDashboard } from "./components/BoardDashboard";
 import { SetUsernameModal } from "./components/SetUsernameModal";
-import { Sparkles, Plus, AlertCircle, GitBranch, ChevronLeft } from "lucide-react";
+import { Sparkles, Plus, GitBranch, ChevronLeft, Lock, X } from "lucide-react";
 
 type AppScreen = "login" | "dashboard" | "board";
+
+interface MovementBannerData {
+  taskId?: number;
+  taskTitle?: string;
+  sourceColumn?: string;
+  targetColumn?: string;
+  type: "TASK_BLOCKED" | "INVARIANT_VIOLATION" | "GENERAL_ERROR";
+  title: string;
+  reason: string;
+  blockingTasks?: Array<{ id: number; title: string }>;
+  affectedTasks?: Array<{ id: number; title: string }>;
+}
+
+function formatColumnName(col?: string): string {
+  if (!col) return "";
+  switch (col) {
+    case "backlog": return "Backlog";
+    case "in_progress": return "In Progress";
+    case "review": return "Review";
+    case "done": return "Done";
+    default: return col.charAt(0).toUpperCase() + col.slice(1).replace("_", " ");
+  }
+}
 
 function getSavedUser(): AuthUser | null {
   try {
@@ -59,9 +82,16 @@ export const App: React.FC = () => {
   const [showCriticalPath, setShowCriticalPath] = useState(false);
 
   const [downstreamChanges, setDownstreamChanges] = useState<DownstreamChange[]>([]);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [invariantTaskIds, setInvariantTaskIds] = useState<number[]>([]);
-  const [invariantData, setInvariantData] = useState<Record<number, { reason: string; affectedTaskIds: number[] }>>({}); 
+  const [movementBanner, setMovementBanner] = useState<MovementBannerData | null>(null);
+
+  // Auto-dismiss movement banner after 8 seconds
+  useEffect(() => {
+    if (!movementBanner) return;
+    const timer = setTimeout(() => {
+      setMovementBanner(null);
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [movementBanner]);
 
   // On mount: restore session
   useEffect(() => {
@@ -99,7 +129,7 @@ export const App: React.FC = () => {
     setCriticalPathIds([]);
     setSuggestions([]);
     setDownstreamChanges([]);
-    setErrorMessage(null);
+    setMovementBanner(null);
   };
 
   const isTempUsername = authUser?.username ? authUser.username.startsWith("temp_") : false;
@@ -129,7 +159,11 @@ export const App: React.FC = () => {
       const data = await api.getBoard(activeBoardId);
       setBoard(data);
     } catch (err: any) {
-      setErrorMessage(err.message || "Failed to load board");
+      setMovementBanner({
+        type: "GENERAL_ERROR",
+        title: "Board Error",
+        reason: err.message || "Failed to load board",
+      });
     } finally {
       setLoading(false);
     }
@@ -170,6 +204,7 @@ export const App: React.FC = () => {
     const { active } = event;
     const task = board?.tasks.find((t) => `task-${t.id}` === active.id);
     if (task) setActiveTask(task);
+    setMovementBanner(null);
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -206,7 +241,9 @@ export const App: React.FC = () => {
       t.id === taskId ? { ...t, column: targetColumn } : t
     );
     setBoard({ ...board, tasks: optimisticTasks });
-    setErrorMessage(null);
+    setMovementBanner(null);
+
+    const targetColumnTitle = formatColumnName(targetColumn);
 
     try {
       const res = await api.moveTask(task.id, { column: targetColumn, version: task.version });
@@ -216,38 +253,67 @@ export const App: React.FC = () => {
       }
     } catch (err: any) {
       setBoard(previousBoard);
-      if (err?.code === "INVARIANT_VIOLATION") {
-        // Parse human-readable reason from violation details
+      if (err?.code === "TASK_BLOCKED") {
+        let blocking: Array<{ id: number; title: string }> = err.details?.blocking_prerequisites || [];
+        if (!blocking.length && task.blocking_prerequisite_ids?.length) {
+          blocking = board.tasks
+            .filter((t) => task.blocking_prerequisite_ids.includes(t.id))
+            .map((t) => ({ id: t.id, title: t.title }));
+        }
+        setMovementBanner({
+          taskId: task.id,
+          taskTitle: task.title,
+          sourceColumn: task.column,
+          targetColumn: targetColumnTitle,
+          type: "TASK_BLOCKED",
+          title: "Movement Blocked",
+          reason: `Cannot advance to ${targetColumnTitle}: prerequisite tasks must be completed first.`,
+          blockingTasks: blocking,
+        });
+      } else if (err?.code === "INVARIANT_VIOLATION") {
         const violations: string[] = err.details?.violations || [];
         const reason = parseInvariantReason(violations, taskId);
-        // Extract affected task IDs from BLOCKED_TASK_ADVANCED:X violations
-        const affectedTaskIds = violations
+        const affectedIds = violations
           .filter((v) => v.startsWith("BLOCKED_TASK_ADVANCED:"))
           .map((v) => parseInt(v.split(":")[1], 10))
           .filter((id) => !isNaN(id));
-        setInvariantTaskIds((prev) => [...prev.filter((id) => id !== taskId), taskId]);
-        setInvariantData((prev) => ({ ...prev, [taskId]: { reason, affectedTaskIds } }));
-        setTimeout(() => {
-          setInvariantTaskIds((prev) => prev.filter((id) => id !== taskId));
-          setInvariantData((prev) => { const n = { ...prev }; delete n[taskId]; return n; });
-        }, 3000);
-      } else if (err?.code === "TASK_BLOCKED") {
-        setErrorMessage(err.message || "Task is blocked by unfinished prerequisites.");
+        const affected = board.tasks
+          .filter((t) => affectedIds.includes(t.id))
+          .map((t) => ({ id: t.id, title: t.title }));
+
+        setMovementBanner({
+          taskId: task.id,
+          taskTitle: task.title,
+          sourceColumn: task.column,
+          targetColumn: targetColumnTitle,
+          type: "INVARIANT_VIOLATION",
+          title: "Dependency Invariant",
+          reason,
+          affectedTasks: affected,
+        });
       } else {
-        setErrorMessage(err.message || "Failed to move task");
+        setMovementBanner({
+          taskId: task.id,
+          taskTitle: task.title,
+          sourceColumn: task.column,
+          targetColumn: targetColumnTitle,
+          type: "GENERAL_ERROR",
+          title: "Action Failed",
+          reason: err?.message || "Failed to move task. Please try again.",
+        });
       }
     }
   };
 
   function parseInvariantReason(violations: string[], taskId: number): string {
     for (const v of violations) {
-      if (v === "GRAPH_HAS_CYCLE") return "Creates a cycle in the dependency graph";
-      if (v === `SCHEDULE_VIOLATION:${taskId}`) return "Planned start before prerequisite finish";
-      if (v === `BLOCKED_TASK_ADVANCED:${taskId}`) return "Task has unfinished prerequisites";
-      if (v.startsWith("SCHEDULE_VIOLATION:")) return "Schedule conflict detected";
-      if (v.startsWith("BLOCKED_TASK_ADVANCED:")) return "Blocked task in active column";
+      if (v === "GRAPH_HAS_CYCLE") return "Cannot move task: would create a circular dependency cycle in the project graph.";
+      if (v === `SCHEDULE_VIOLATION:${taskId}`) return "Cannot move task: planned start occurs before prerequisite finish dates.";
+      if (v === `BLOCKED_TASK_ADVANCED:${taskId}`) return "Cannot move task: prerequisite tasks are not finished yet.";
+      if (v.startsWith("SCHEDULE_VIOLATION:")) return "Cannot move task: causes a schedule conflict with connected tasks.";
+      if (v.startsWith("BLOCKED_TASK_ADVANCED:")) return "Cannot move backwards: downstream active tasks depend on this task.";
     }
-    return "Constraint violated";
+    return "Cannot move task: violates project dependency graph constraints.";
   }
 
   // ── Screens ─────────────────────────────────────────────────────────────────
@@ -428,37 +494,8 @@ export const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Error Banner */}
-      {errorMessage && (
-        <div
-          style={{
-            background: "var(--color-error-bg)",
-            borderBottom: "1px solid var(--color-error-border)",
-            color: "var(--color-error)",
-            padding: "12px 32px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            fontSize: "14px",
-            fontWeight: 500,
-            animation: "slideDown 0.15s ease",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <AlertCircle size={18} />
-            <span>{errorMessage}</span>
-          </div>
-          <button
-            onClick={() => setErrorMessage(null)}
-            style={{ color: "var(--color-error)", fontWeight: 600, fontSize: "13px", padding: "4px 8px", background: "none", border: "none", cursor: "pointer" }}
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
-
       {/* Kanban Board Canvas */}
-      <main style={{ flex: 1, padding: "24px 32px", overflowX: "auto" }}>
+      <main style={{ flex: 1, padding: "20px 32px 24px", overflowX: "auto", display: "flex", flexDirection: "column" }}>
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
@@ -476,8 +513,6 @@ export const App: React.FC = () => {
                   tasks={colTasks}
                   allTasks={board?.tasks || []}
                   criticalPathIds={criticalPathIds}
-                  invariantTaskIds={invariantTaskIds}
-                  invariantData={invariantData}
                   onCardClick={(task) => setSelectedTask(task)}
                 />
               );
@@ -495,6 +530,181 @@ export const App: React.FC = () => {
             ) : null}
           </DragOverlay>
         </DndContext>
+
+        {/* Space below the columns: Dedicated Movement / Invariant Violation Banner */}
+        {movementBanner && (
+          <div
+            style={{
+              marginTop: "20px",
+              background: "#fffbfb",
+              border: "1.5px solid #fca5a5",
+              borderRadius: "var(--radius-md)",
+              padding: "14px 20px",
+              boxShadow: "0 4px 16px rgba(220, 38, 38, 0.08)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "16px",
+              animation: "slideUp 0.2s ease",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "14px", flex: 1, minWidth: 0, flexWrap: "wrap" }}>
+              <div
+                style={{
+                  width: "36px",
+                  height: "36px",
+                  borderRadius: "8px",
+                  background: "rgba(220, 38, 38, 0.1)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <Lock size={18} color="#b91c1c" />
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontFamily: "var(--font-mono)",
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                      color: "#991b1b",
+                      background: "rgba(220, 38, 38, 0.1)",
+                      padding: "2px 7px",
+                      borderRadius: "4px",
+                    }}
+                  >
+                    {movementBanner.title}
+                  </span>
+
+                  {movementBanner.taskId && (
+                    <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-ink)" }}>
+                      T{movementBanner.taskId} {movementBanner.taskTitle}
+                      {movementBanner.targetColumn && (
+                        <span style={{ color: "var(--color-muted)", fontWeight: 400 }}>
+                          {" "}→{" "}
+                          <strong style={{ color: "var(--color-ink)", fontWeight: 600 }}>
+                            {movementBanner.targetColumn}
+                          </strong>
+                        </span>
+                      )}
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ fontSize: "13px", color: "var(--color-body)", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <span>{movementBanner.reason}</span>
+
+                  {movementBanner.blockingTasks && movementBanner.blockingTasks.length > 0 && (
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                      <span style={{ fontSize: "12px", color: "var(--color-muted)", fontWeight: 500 }}>Unfinished prerequisites:</span>
+                      {movementBanner.blockingTasks.map((pt) => (
+                        <button
+                          key={pt.id}
+                          onClick={() => {
+                            const found = board?.tasks.find((t) => t.id === pt.id);
+                            if (found) setSelectedTask(found);
+                          }}
+                          title="Click to view task details"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            background: "rgba(220, 38, 38, 0.08)",
+                            border: "1px solid rgba(220, 38, 38, 0.2)",
+                            borderRadius: "4px",
+                            padding: "2px 7px",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            color: "#991b1b",
+                            cursor: "pointer",
+                            transition: "all 0.1s ease",
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(220, 38, 38, 0.16)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(220, 38, 38, 0.08)")}
+                        >
+                          <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", opacity: 0.8 }}>T{pt.id}</span>
+                          <span>{pt.title}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {movementBanner.affectedTasks && movementBanner.affectedTasks.length > 0 && (
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                      <span style={{ fontSize: "12px", color: "var(--color-muted)", fontWeight: 500 }}>Affects:</span>
+                      {movementBanner.affectedTasks.map((at) => (
+                        <button
+                          key={at.id}
+                          onClick={() => {
+                            const found = board?.tasks.find((t) => t.id === at.id);
+                            if (found) setSelectedTask(found);
+                          }}
+                          title="Click to view task details"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            background: "rgba(220, 38, 38, 0.08)",
+                            border: "1px solid rgba(220, 38, 38, 0.2)",
+                            borderRadius: "4px",
+                            padding: "2px 7px",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            color: "#991b1b",
+                            cursor: "pointer",
+                            transition: "all 0.1s ease",
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(220, 38, 38, 0.16)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(220, 38, 38, 0.08)")}
+                        >
+                          <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", opacity: 0.8 }}>T{at.id}</span>
+                          <span>{at.title}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setMovementBanner(null)}
+              title="Dismiss"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                padding: "6px 12px",
+                borderRadius: "6px",
+                border: "1px solid rgba(0,0,0,0.08)",
+                background: "white",
+                color: "var(--color-muted)",
+                fontSize: "12px",
+                fontWeight: 600,
+                cursor: "pointer",
+                flexShrink: 0,
+                transition: "all 0.15s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = "var(--color-ink)";
+                e.currentTarget.style.borderColor = "rgba(0,0,0,0.18)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = "var(--color-muted)";
+                e.currentTarget.style.borderColor = "rgba(0,0,0,0.08)";
+              }}
+            >
+              <X size={14} />
+              <span>Dismiss</span>
+            </button>
+          </div>
+        )}
       </main>
 
       {/* Task Detail Modal + Ripple Effect */}
