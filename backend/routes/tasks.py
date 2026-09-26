@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from backend.db import get_db
 from backend.models import Board, Task, Dependency, AuditLog, TaskColumn, AuditSource
+from backend.auth import get_current_user_optional, require_board_access
 from backend.schemas import (
     TaskCreate,
     TaskUpdate,
@@ -55,13 +56,19 @@ def _task_to_response(
 
 
 @router.post("", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
-def create_task(payload: TaskCreate, db: Session = Depends(get_db)):
+def create_task(
+    payload: TaskCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_optional),
+):
     board = db.query(Board).filter(Board.id == payload.board_id).first()
     if not board:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "BOARD_NOT_FOUND", "message": "Board not found."},
         )
+
+    require_board_access(board, current_user)
 
     # Initial planned_start defaults to board start date or pinned_start
     initial_start = payload.pinned_start or board.start_date
@@ -108,7 +115,12 @@ def create_task(payload: TaskCreate, db: Session = Depends(get_db)):
 
 
 @router.patch("/{task_id}")
-def update_task(task_id: int, payload: TaskUpdate, db: Session = Depends(get_db)):
+def update_task(
+    task_id: int,
+    payload: TaskUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_optional),
+):
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
         raise HTTPException(
@@ -128,6 +140,8 @@ def update_task(task_id: int, payload: TaskUpdate, db: Session = Depends(get_db)
         )
 
     board = db.query(Board).filter(Board.id == task.board_id).first()
+    require_board_access(board, current_user)
+
     all_tasks = db.query(Task).filter(Task.board_id == task.board_id).all()
     task_ids = [t.id for t in all_tasks]
     all_edges = db.query(Dependency).filter(Dependency.task_id.in_(task_ids)).all() if task_ids else []
@@ -182,7 +196,12 @@ def update_task(task_id: int, payload: TaskUpdate, db: Session = Depends(get_db)
 
 
 @router.post("/{task_id}/move")
-def move_task(task_id: int, payload: TaskMove, db: Session = Depends(get_db)):
+def move_task(
+    task_id: int,
+    payload: TaskMove,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_optional),
+):
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
         raise HTTPException(
@@ -202,6 +221,8 @@ def move_task(task_id: int, payload: TaskMove, db: Session = Depends(get_db)):
         )
 
     board = db.query(Board).filter(Board.id == task.board_id).first()
+    require_board_access(board, current_user)
+
     all_tasks = db.query(Task).filter(Task.board_id == task.board_id).all()
     task_ids = [t.id for t in all_tasks]
     all_edges = db.query(Dependency).filter(Dependency.task_id.in_(task_ids)).all() if task_ids else []
@@ -285,7 +306,11 @@ def move_task(task_id: int, payload: TaskMove, db: Session = Depends(get_db)):
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_task(task_id: int, db: Session = Depends(get_db)):
+def delete_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_optional),
+):
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
         raise HTTPException(
@@ -295,6 +320,7 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
 
     board_id = task.board_id
     board = db.query(Board).filter(Board.id == board_id).first()
+    require_board_access(board, current_user)
 
     # Find affected successors before deletion
     all_tasks = db.query(Task).filter(Task.board_id == board_id).all()
@@ -339,7 +365,11 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{task_id}/explanation", response_model=TaskExplanationResponse)
-def get_task_explanation(task_id: int, db: Session = Depends(get_db)):
+def get_task_explanation(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_optional),
+):
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
         raise HTTPException(
@@ -348,6 +378,8 @@ def get_task_explanation(task_id: int, db: Session = Depends(get_db)):
         )
 
     board = db.query(Board).filter(Board.id == task.board_id).first()
+    require_board_access(board, current_user)
+
     all_tasks = db.query(Task).filter(Task.board_id == task.board_id).all()
     task_ids = [t.id for t in all_tasks]
     all_edges = db.query(Dependency).filter(Dependency.task_id.in_(task_ids)).all() if task_ids else []
@@ -376,7 +408,12 @@ def get_task_explanation(task_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{task_id}/impact-preview", response_model=ImpactPreviewResponse)
-def get_impact_preview(task_id: int, payload: TaskImpactPreview, db: Session = Depends(get_db)):
+def get_impact_preview(
+    task_id: int,
+    payload: TaskImpactPreview,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_optional),
+):
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
         raise HTTPException(
@@ -385,6 +422,8 @@ def get_impact_preview(task_id: int, payload: TaskImpactPreview, db: Session = D
         )
 
     board = db.query(Board).filter(Board.id == task.board_id).first()
+    require_board_access(board, current_user)
+
     all_tasks = db.query(Task).filter(Task.board_id == task.board_id).all()
     task_ids = [t.id for t in all_tasks]
     all_edges = db.query(Dependency).filter(Dependency.task_id.in_(task_ids)).all() if task_ids else []

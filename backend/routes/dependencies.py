@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from backend.db import get_db
 from backend.models import Board, Task, Dependency, AISuggestion, AuditLog, AuditSource
 from backend.schemas import DependencyCreate, DependencyResponse
+from backend.auth import get_current_user_optional, require_board_access
 from engine.graph import would_create_cycle
 from engine.scheduler import recompute
 from engine.invariants import check_invariants
@@ -19,8 +20,24 @@ class SuggestionsRequest(BaseModel):
     task_id: Optional[int] = None
 
 
+def _resolve_board_for_task(task_id: int, db: Session) -> tuple:
+    """Return (task, board) or raise 404."""
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "TASK_NOT_FOUND", "message": f"Task {task_id} not found."},
+        )
+    board = db.query(Board).filter(Board.id == task.board_id).first()
+    return task, board
+
+
 @router.post("", response_model=dict, status_code=status.HTTP_201_CREATED)
-def create_dependency(payload: DependencyCreate, db: Session = Depends(get_db)):
+def create_dependency(
+    payload: DependencyCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_optional),
+):
     # 1. Validation: Self-dependency
     if payload.task_id == payload.prerequisite_id:
         raise HTTPException(
@@ -52,6 +69,9 @@ def create_dependency(payload: DependencyCreate, db: Session = Depends(get_db)):
             detail={"code": "BOARD_MISMATCH", "message": "Tasks must belong to the same board."},
         )
 
+    board = db.query(Board).filter(Board.id == task.board_id).first()
+    require_board_access(board, current_user)
+
     # 2. Validation: Duplicate
     existing = (
         db.query(Dependency)
@@ -71,7 +91,6 @@ def create_dependency(payload: DependencyCreate, db: Session = Depends(get_db)):
             },
         )
 
-    board = db.query(Board).filter(Board.id == task.board_id).first()
     all_tasks = db.query(Task).filter(Task.board_id == task.board_id).all()
     task_ids = [t.id for t in all_tasks]
     all_edges = db.query(Dependency).filter(Dependency.task_id.in_(task_ids)).all() if task_ids else []
@@ -132,7 +151,11 @@ def create_dependency(payload: DependencyCreate, db: Session = Depends(get_db)):
 
 
 @router.delete("/{dep_id}", response_model=dict)
-def delete_dependency(dep_id: int, db: Session = Depends(get_db)):
+def delete_dependency(
+    dep_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_optional),
+):
     dep = db.query(Dependency).filter(Dependency.id == dep_id).first()
     if not dep:
         raise HTTPException(
@@ -143,6 +166,7 @@ def delete_dependency(dep_id: int, db: Session = Depends(get_db)):
     task_id = dep.task_id
     task = db.query(Task).filter(Task.id == task_id).first()
     board = db.query(Board).filter(Board.id == task.board_id).first()
+    require_board_access(board, current_user)
 
     all_tasks = db.query(Task).filter(Task.board_id == task.board_id).all()
     task_ids = [t.id for t in all_tasks]
@@ -186,8 +210,20 @@ def delete_dependency(dep_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/suggestions", response_model=list[dict])
-def list_pending_suggestions(board_id: int = 1, db: Session = Depends(get_db)):
+def list_pending_suggestions(
+    board_id: int = 1,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_optional),
+):
     """Fetch currently pending AI suggestions for the board without re-triggering the pipeline."""
+    board = db.query(Board).filter(Board.id == board_id).first()
+    if not board:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "BOARD_NOT_FOUND", "message": "Board not found."},
+        )
+    require_board_access(board, current_user)
+
     rows = (
         db.query(AISuggestion)
         .join(Task, Task.id == AISuggestion.task_id)
@@ -211,13 +247,19 @@ def list_pending_suggestions(board_id: int = 1, db: Session = Depends(get_db)):
 
 
 @router.post("/suggestions", response_model=list[dict])
-def get_ai_suggestions(payload: SuggestionsRequest, db: Session = Depends(get_db)):
+def get_ai_suggestions(
+    payload: SuggestionsRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_optional),
+):
     board = db.query(Board).filter(Board.id == payload.board_id).first()
     if not board:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "BOARD_NOT_FOUND", "message": "Board not found."},
         )
+
+    require_board_access(board, current_user)
 
     # Rate limiting per BUILD_SPEC.md §5.6
     try:
@@ -240,6 +282,7 @@ def get_ai_suggestions(payload: SuggestionsRequest, db: Session = Depends(get_db
                 existing_edges=all_edges,
                 rejected_pairs=rejected_pairs,
                 target_task_id=payload.task_id,
+                db=db,
             )
 
             for item in raw_suggestions:
@@ -294,7 +337,6 @@ def get_ai_suggestions(payload: SuggestionsRequest, db: Session = Depends(get_db
                 for s in all_pending
             ]
 
-
     except BoardRateLimitError as e:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -303,7 +345,11 @@ def get_ai_suggestions(payload: SuggestionsRequest, db: Session = Depends(get_db
 
 
 @router.post("/suggestions/{suggestion_id}/accept", response_model=dict)
-def accept_suggestion(suggestion_id: int, db: Session = Depends(get_db)):
+def accept_suggestion(
+    suggestion_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_optional),
+):
     sug = db.query(AISuggestion).filter(AISuggestion.id == suggestion_id).first()
     if not sug:
         raise HTTPException(
@@ -311,10 +357,15 @@ def accept_suggestion(suggestion_id: int, db: Session = Depends(get_db)):
             detail={"code": "SUGGESTION_NOT_FOUND", "message": f"Suggestion {suggestion_id} not found."},
         )
 
+    # Resolve board from suggestion's task and enforce access
+    task, board = _resolve_board_for_task(sug.task_id, db)
+    require_board_access(board, current_user)
+
     # Uses the exact same creation path and validations as POST /dependencies
     result = create_dependency(
         DependencyCreate(task_id=sug.task_id, prerequisite_id=sug.prerequisite_id),
         db=db,
+        current_user=current_user,
     )
 
     sug.status = "accepted"
@@ -324,13 +375,20 @@ def accept_suggestion(suggestion_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/suggestions/{suggestion_id}/reject", status_code=status.HTTP_204_NO_CONTENT)
-def reject_suggestion(suggestion_id: int, db: Session = Depends(get_db)):
+def reject_suggestion(
+    suggestion_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_optional),
+):
     sug = db.query(AISuggestion).filter(AISuggestion.id == suggestion_id).first()
     if not sug:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "SUGGESTION_NOT_FOUND", "message": f"Suggestion {suggestion_id} not found."},
         )
+
+    task, board = _resolve_board_for_task(sug.task_id, db)
+    require_board_access(board, current_user)
 
     sug.status = "rejected"
     db.commit()

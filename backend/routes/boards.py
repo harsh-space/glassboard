@@ -1,16 +1,22 @@
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.db import get_db
 from backend.models import Board, Task, Dependency
 from backend.schemas import BoardResponse, TaskResponse, DependencyResponse, SlackItem
+from backend.auth import get_current_user_optional, require_board_access
 from engine.derive import derive_task_fields
 
 router = APIRouter(prefix="/boards", tags=["boards"])
 
 
 @router.get("/{board_id}", response_model=BoardResponse)
-def get_board(board_id: int, db: Session = Depends(get_db)):
+def get_board(
+    board_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_optional),
+):
     board = db.query(Board).filter(Board.id == board_id).first()
     if not board:
         raise HTTPException(
@@ -21,6 +27,8 @@ def get_board(board_id: int, db: Session = Depends(get_db)):
                 "details": {"board_id": board_id},
             },
         )
+
+    require_board_access(board, current_user)
 
     tasks = db.query(Task).filter(Task.board_id == board_id).order_by(Task.position).all()
     task_ids = [t.id for t in tasks]
@@ -85,13 +93,19 @@ def get_board(board_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{board_id}/critical-path")
-def get_critical_path(board_id: int, db: Session = Depends(get_db)):
+def get_critical_path(
+    board_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_optional),
+):
     board = db.query(Board).filter(Board.id == board_id).first()
     if not board:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "BOARD_NOT_FOUND", "message": f"Board {board_id} not found."},
         )
+
+    require_board_access(board, current_user)
 
     tasks = db.query(Task).filter(Task.board_id == board_id).all()
     if not tasks:
@@ -135,17 +149,6 @@ def get_critical_path(board_id: int, db: Session = Depends(get_db)):
 
     return {"task_ids": path, "total_duration": total_duration}
 
-
-@router.delete("/{board_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_board(board_id: int, db: Session = Depends(get_db)):
-    board = db.query(Board).filter(Board.id == board_id).first()
-    if not board:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"code": "BOARD_NOT_FOUND", "message": f"Board {board_id} not found.", "details": {}},
-        )
-    db.delete(board)
-    db.commit()
-    return None
-
-
+# NOTE: DELETE /boards/{board_id} (unprotected) removed intentionally.
+# The only board-delete endpoint is DELETE /api/auth/boards/{board_id}
+# in routes/auth.py, which enforces ownership via JWT.

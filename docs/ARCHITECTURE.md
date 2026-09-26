@@ -170,8 +170,14 @@ The AI pipeline in `backend/ai/pipeline.py` implements:
 - **Propose:** `generate_heuristic_suggestions()` — keyword-stage ordering
   heuristic from `BUILD_SPEC.md §5.6`.
 - **Challenge:** Not run in heuristic mode (verdict = "not_run").
-- **Verify:** Seven deterministic checks per `BUILD_SPEC.md §5.3` run in
-  the route handler (`backend/routes/dependencies.py`).
+- **Verify:** Deterministic verification checks per `BUILD_SPEC.md §5.3` run in
+  the pipeline (`backend/ai/pipeline.py`). In particular, check 5 enforces that
+  `evidence_phrase` is a literal substring of the **prerequisite (source) task's**
+  title or description only. Per documented interpretation, checking both tasks was
+  rejected as too loose; the justification must quote the prerequisite task. Proposals
+  with fabricated evidence or cycle violations are dropped and logged to `audit_log`
+  (`action='ai_suggestion_evidence_rejected'` / `action='ai_suggestion_cycle_rejected'`,
+  `source='ai'`).
 - **Human review:** Accept / Reject endpoints per §5.4.
 
 Rate limiting: one suggestion round per board at a time, enforced by
@@ -272,6 +278,8 @@ Per `BUILD_SPEC.md §8.3`:
 ### Multi-User Authentication & Canonical Guest Mode
 
 Multi-user authentication (via JWT with bcrypt password hashing in `backend/auth.py` and `backend/routes/auth.py`) was introduced beyond the original synopsis build target to enable user-specific board ownership, creation, and deletion in multi-tenant environments. To strictly preserve the synopsis's core promise of a single shared, zero-friction workspace, a dedicated **Guest Bypass** (`Continue as Guest / View Demo Board`) is integrated into `LoginScreen.tsx` and `App.tsx`. Guest sessions directly load the canonical seeded board (`id=1`, `owner_id=NULL`) with complete access to the DAG scheduling engine, Invariant Gate, and AI Copilot, guaranteeing that evaluators and demo runs are never blocked behind credentials.
+
+Board-level authorization is strictly enforced on all underlying data endpoints (`backend/routes/boards.py`, `backend/routes/tasks.py`, and `backend/routes/dependencies.py`) via the shared `require_board_access` dependency in `backend/auth.py`, rather than relying solely on the `/auth/boards` listing routes. Any board with `owner_id` set is genuinely private: requests without an Authorization bearer token receive `401 UNAUTHORIZED`, and requests from a non-owning authenticated user receive `403 FORBIDDEN`. The canonical guest/demo board (`owner_id IS NULL`) remains fully accessible to unauthenticated callers without credentials, preserving seamless evaluator access while eliminating unauthenticated attack surface on private tenant data.
 
 ---
 

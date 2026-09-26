@@ -178,6 +178,7 @@ def run_ai_pipeline(
     existing_edges: Sequence[Any],
     rejected_pairs: set[tuple[int, int]],
     target_task_id: int | None = None,
+    db: Any = None,
 ) -> list[dict[str, Any]]:
     """
     Executes the full Propose -> Challenge -> Verify pipeline per BUILD_SPEC.md §5.
@@ -310,13 +311,35 @@ Output JSON format:
         if ch_verdict == "rejected":
             continue
 
-        # Check 6: evidence_phrase is a literal substring of dependent or prereq text
-        dep_task = task_map[dep_id]
+        # Check 6: evidence_phrase must be a literal substring of the PREREQUISITE
+        # task's title + description only (BUILD_SPEC.md §5.3, check 5).
+        # If the phrase is not found there, the justification is hallucinated — drop it.
+        # Checking both tasks would be looser than the spec: the reason is supposed to
+        # quote the prerequisite's text, not the dependent's (documented interpretation).
         prereq_task = task_map[prereq_id]
-        combined_text = f"{dep_task.title} {dep_task.description} {prereq_task.title} {prereq_task.description}".lower()
-        if evidence.lower() not in combined_text:
-            # Fall back to using the prereq title if evidence is hallucinated
-            evidence = prereq_task.title
+        dep_task = task_map[dep_id]
+        prereq_text = f"{prereq_task.title} {prereq_task.description or ''}".lower()
+        if evidence.lower() not in prereq_text:
+            # Log the rejection so it appears in the audit trail
+            import logging
+            logging.getLogger(__name__).info(
+                "ai_suggestion_evidence_rejected: prereq=%s dep=%s evidence=%r not in prereq text",
+                prereq_id, dep_id, evidence,
+            )
+            if db is not None:
+                from backend.models import AuditLog
+                db.add(
+                    AuditLog(
+                        action="ai_suggestion_evidence_rejected",
+                        payload={
+                            "prerequisite_id": prereq_id,
+                            "task_id": dep_id,
+                            "evidence_phrase": evidence,
+                        },
+                        source="ai",
+                    )
+                )
+            continue  # drop — do not append to surviving_suggestions
 
         # Check 7: confidence threshold >= 0.5
         if confidence < 0.5:
@@ -324,6 +347,18 @@ Output JSON format:
 
         # Check 8: cycle detection
         if would_create_cycle(prereq_id, dep_id, list(edge_pairs)):
+            if db is not None:
+                from backend.models import AuditLog
+                db.add(
+                    AuditLog(
+                        action="ai_suggestion_cycle_rejected",
+                        payload={
+                            "prerequisite_id": prereq_id,
+                            "task_id": dep_id,
+                        },
+                        source="ai",
+                    )
+                )
             continue
 
         surviving_suggestions.append({
