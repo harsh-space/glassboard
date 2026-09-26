@@ -1,84 +1,41 @@
-# TaskFlow Pro — Progress Log
+# TaskFlow Pro — Progress & Submission Log
 
-Current Status: Phase 8 Complete — Ready for Submission
-Last Updated: 2026-09-26
-
----
-
-## Build-Order Checklist (CLAUDE.md §3 / BUILD_SPEC.md §7)
-
-### Phase 1 — Foundation (DONE)
-- [x] Repo structure initialized per `CLAUDE.md` §4.
-- [x] `.gitignore` committed before any other file.
-- [x] No secrets present in repo (verified with grep).
-- [x] `.env.example` committed with dummy values.
-- [x] DB schema (`backend/models.py`, `backend/db.py`) created.
-- [x] Seed script (`scripts/seed.py`) loads all 10 tasks and 13 dependencies.
-- [x] `GET /boards/{id}` returns the seeded board with correct derived fields.
-
-### Phase 2 — Engine (DONE)
-- [x] `engine/` pure Python module with zero DB or web imports (verified with grep).
-- [x] Cycle detection (`engine/graph.py`).
-- [x] Scheduling recompute (`engine/scheduler.py`).
-- [x] Blocked/Ready derivation (`engine/derive.py`).
-- [x] Regression handling (`engine/derive.py` + `scheduler.py`).
-- [x] Invariant Gate (`engine/invariants.py`).
-- [x] Brute-force test oracle (`engine/oracle.py`).
-- [x] All tests pass (§8.1) — 34 tests total (15 in `tests/engine/`, 19 in `tests/api/`), including the 1,000 random graph oracle property test.
-
-
-### Phase 3 — API and Board UI (DONE)
-- [x] All API endpoints in `BUILD_SPEC.md` §4 implemented.
-- [x] Pydantic validation on all requests.
-- [x] CORS limited to frontend origin.
-- [x] AI endpoint rate limited (1 req / 5s per board).
-- [x] LLM API key server-side only.
-- [x] Board UI rendered with dnd-kit.
-- [x] Forms for tasks and dependencies.
-- [x] All 34 unit and integration tests passing (`pytest -v`).
-
-### Phase 4 — Wiring and Persistence (DONE)
-- [x] Refresh preserves board state (verified via DB persistence).
-- [x] Blocked reasons shown on cards (`blocking_prerequisite_ids`).
-- [x] Optimistic updates and rollback.
-- [x] `409 VERSION_CONFLICT` handling in UI & API.
-
-### Phase 5 — Minimal AI Path (DONE)
-- [x] Propose → Verify → Human approval pipeline (Groq allam-2-7b integration).
-- [x] Fallback heuristic if API key is unset or error occurs (tested & passing).
-- [x] `AI_TOOL_DECLARATION.md` updated with provider/model details (`allam-2-7b` via Groq).
-
-### Phase 6 — Differentiators (DONE)
-- [x] Why Panel core (driving prerequisite + slack) (API + UI implemented).
-- [x] AI challenge pass (skeptic badge rendered in UI).
-- [x] Ripple view (`RippleToast` component implemented).
-
-### Phase 7 — Optional Extensions (DONE)
-- [x] Critical path view (API endpoint + UI toggle implemented).
-- [x] Impact preview dry-run (API endpoint + UI modal implemented).
-
-### Phase 8 — Delivery Polish (DONE)
-- [x] `docs/ARCHITECTURE.md` written against actual build.
-- [x] `README.md` setup and run instructions.
-- [x] `scripts/measure_ai.py` benchmarks recorded.
-- [x] Clean security audit (verified zero secrets, git ignores active).
-- [x] Demo script prepared (`docs/DEMO_SCRIPT.md`).
-
+**Status:** Complete — All 8 Core Phases + Pre-Submission Audit Verified  
+**Branch:** `my_sub` (Submission) | `main`  
+**Test Suite:** 47/47 Tests Passing (`pytest -v`)  
+**Live Production:** [Vercel Frontend](https://glassboard-ten.vercel.app) | [Render API](https://glassboard-backend.onrender.com/docs) | Neon PostgreSQL  
 
 ---
 
-## Escalated Decisions Log (BUILD_SPEC.md §10)
-1. **`actual_end` semantics**: Confirmed by user (2026-09-25) — set `actual_end = planned_end` when task is moved to Done.
-2. **Submission branch name**: Confirmed by user (2026-09-25) — `main` is final.
-3. **LLM provider**: Confirmed by user (2026-09-25) — Groq API with `allam-2-7b`.
-4. **Deployment target**: Confirmed by user (2026-09-26) — Neon (PostgreSQL), Render (FastAPI backend), Vercel (React frontend).
+## 1. Phase Completion Summary
+
+| Phase | Milestone | Scope Delivered | Status |
+| :--- | :--- | :--- | :--- |
+| **Phase 1: Foundation** | Schema & Seeds | 10 tasks, 13 dependencies, SQLite/PostgreSQL support, zero secrets | **DONE** |
+| **Phase 2: Engine** | Pure DAG Core | Cycle detection (BFS), max-not-sum scheduler, Invariant Gate, oracle test | **DONE** |
+| **Phase 3: API & UI** | REST & Kanban | FastAPI CRUD, dnd-kit board, optimistic updates, rate limits, Pydantic v2 | **DONE** |
+| **Phase 4: Persistence** | State & Invariants | Version conflict checks (`409`), blocked card reasons, refresh persistence | **DONE** |
+| **Phase 5: AI Pipeline** | Copilot Guardrails | Propose → Challenge → Verify → Human approval, heuristic fallback | **DONE** |
+| **Phase 6: Differentiators** | Explainability | Why Panel (driving prereqs + slack), skeptic badge, Ripple Toast | **DONE** |
+| **Phase 7: Extensions** | Advanced Views | Critical path highlight, dry-run impact preview modal | **DONE** |
+| **Phase 8: Polish** | Delivery Docs | Architecture doc, walkthrough demo script, AI measurement benchmarks | **DONE** |
+| **Phase 9: Final Audit** | Security & AI Check | Board-level auth enforcement, prerequisite evidence validation | **DONE** |
 
 ---
 
-## Current Activity
-- Connected to live Neon PostgreSQL database and successfully seeded canonical board, tasks, and dependencies.
-- Verified all 34 tests pass against Neon PostgreSQL.
-- Prepared `render.yaml` for Render backend deployment and `frontend/vercel.json` for Vercel frontend deployment.
+## 2. Test Verification Matrix (47 Passed)
 
+- **Engine Tests (15 passed):** Cycle rejection, diamond math (max-not-sum), rollback & regression, Invariant Gate, 1,000 random-graph oracle property test.
+- **API Tests (20 passed):** Board loading, CRUD, drag/move rejection on blocked cards, Why Panel explanation, impact preview, rate limiting, CORS.
+- **Authorization Tests (8 passed):** Public guest bypass (`board_id=1`), 401 unauthenticated on private boards, 403 cross-tenant rejection, owner access.
+- **AI Pipeline Tests (4 passed):** Fabricated evidence rejection, prerequisite text substring check, audit log trail recording (`action='ai_suggestion_evidence_rejected'`).
 
+---
 
+## 3. Key Architecture & Submission Decisions
+
+1. **Pure Engine Isolation:** Zero DB/web imports in `engine/`. Engine is independently testable without database or server.
+2. **Deterministic Max-Not-Sum:** Delays propagate through the driving prerequisite only; parallel slack does not compound artificially.
+3. **Guest Bypass with Private Enforcement:** Canonical demo board (`id=1`, `owner_id=NULL`) is open for instant evaluation; user-created boards require JWT authentication.
+4. **AI Trust Guardrail:** Evidence phrases must strictly be a literal substring of the prerequisite task's text; hallucinations are dropped and logged to `audit_log`.
+5. **AI Metrics:** Heuristic pipeline achieves **100.0% precision** and **84.6% recall** against the canonical seed board (measured via `scripts/measure_ai.py`).

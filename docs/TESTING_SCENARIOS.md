@@ -1,9 +1,12 @@
 # TaskFlow Pro — Interactive UI/UX & Functionality Testing Guide
 
-Both servers are live and ready for testing:
-- **Frontend App:** [http://localhost:5173](http://localhost:5173)
-- **Backend API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Database:** Freshly seeded with the canonical 10-task, 13-dependency graph.
+Both local and production environments are live and ready for testing:
+- **Live Production App:** [https://glassboard-ten.vercel.app](https://glassboard-ten.vercel.app)
+- **Live Backend API Docs:** [https://glassboard-backend.onrender.com/docs](https://glassboard-backend.onrender.com/docs)
+- **Local Dev Server:** [http://localhost:5173](http://localhost:5173) (API on `:8000`)
+- **Database:** Seeded with the canonical 10-task, 13-dependency graph.
+
+> **Access Note:** On first opening the app, you will land on the login screen. Click **"Continue as Guest / View Demo Board"** to immediately open the canonical shared workspace (Board #1) with zero login friction. (You may also register an account to create isolated personal boards).
 
 ---
 
@@ -135,9 +138,44 @@ Verify state persistence across page refreshes and optimistic concurrency confli
 ### Steps:
 1. Make any modification on the board (e.g. edit a task title or drag a card).
 2. Press **F5** (hard refresh) in your browser:
-   - **Expected Behavior:** The board reloads from SQLite with the exact updated positions, dates, and column states.
+   - **Expected Behavior:** The board reloads with the exact updated positions, dates, and column states.
 3. To test `409 VERSION_CONFLICT`:
-   - Open [http://localhost:5173](http://localhost:5173) in two browser tabs side-by-side.
+   - Open the application in two browser tabs side-by-side.
    - On Tab 1, open Task 1, edit the title to "Task 1 Updated", and save.
    - On Tab 2 (which still holds version 1), try saving a different change to Task 1.
    - **Expected Behavior:** Tab 2 displays a `409 Version Conflict` notification, preventing silent overwrite.
+
+---
+
+## Scenario 9: Board-Level Authorization & Multi-Tenant Isolation
+
+### Objective:
+Verify that the canonical guest board is open to all callers, while user-created boards strictly enforce JWT ownership across all data routes.
+
+### Steps:
+1. Open the app as Guest (`Continue as Guest / View Demo Board`):
+   - You land directly on Board #1 (`owner_id = NULL`).
+   - All DAG recomputes, drag-and-drop operations, and AI suggestions function with zero authentication token required.
+2. In API docs (`/docs`), execute `GET /api/boards/1`:
+   - Returns `200 OK` with the full board payload without providing any `Authorization` header.
+3. Create a private board via `POST /api/auth/boards` with a valid user token.
+4. Attempt `GET /api/boards/{private_board_id}` with **no token**:
+   - Returns `401 UNAUTHORIZED`.
+5. Attempt `GET /api/boards/{private_board_id}` with a **different user's token**:
+   - Returns `403 FORBIDDEN`.
+6. Attempt `GET /api/boards/{private_board_id}` with the **board owner's token**:
+   - Returns `200 OK`.
+
+---
+
+## Automated Test Suite (47 Passing Tests)
+
+For programmatic verification, run the full automated test suite:
+```bash
+python -m pytest -v
+```
+- **15 Engine Tests:** Pure DAG acyclicity, max-not-sum propagation, regression rollback, and 1,000 random-graph oracle property tests.
+- **20 API Tests:** Board CRUD, blocked drag rejections, Why Panel derivation, impact preview, rate limiting, and CORS headers.
+- **8 Authorization Tests:** Public guest bypass, 401 unauthenticated, 403 cross-tenant, and owner access verification.
+- **4 AI Pipeline Tests:** Strict prerequisite substring matching, hallucinated evidence drops, and audit log recording.
+

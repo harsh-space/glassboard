@@ -79,6 +79,14 @@ Model/provider used: **Groq API** running **`allam-2-7b`** (with automatic keywo
 | 2026-09-26 | `tests/api/test_auth.py` | Integration tests for full auth lifecycle, duplicate registration, board scoping, guest mode | [x] | [x] |
 | 2026-09-26 | `scripts/measure_performance.py` | Performance benchmark measuring scheduler and invariant check latency | [x] | [x] |
 | 2026-09-26 | `scripts/sync_seq.py` | Utility script to sync sequence IDs with seed database | [x] | [x] |
+| 2026-09-26 | `backend/auth.py` | Shared authorization helper (get_current_user_optional, require_board_access) | [x] | [x] |
+| 2026-09-26 | `backend/routes/boards.py` | Protected board endpoints with ownership enforcement; removed unauthenticated delete | [x] | [x] |
+| 2026-09-26 | `backend/routes/tasks.py` | Protected task endpoints (create, update, move, delete, explanation, impact preview) with ownership check | [x] | [x] |
+| 2026-09-26 | `backend/routes/dependencies.py` | Protected dependency & suggestion endpoints with ownership check; wired audit logging for drops | [x] | [x] |
+| 2026-09-26 | `backend/ai/pipeline.py` | Enforced strict prerequisite substring check for evidence phrases; added audit logging for rejections | [x] | [x] |
+| 2026-09-26 | `tests/api/test_authorization.py` | Comprehensive authorization test suite: guest bypass, 401 unauthenticated, 403 cross-tenant, 200 owner | [x] | [x] |
+| 2026-09-26 | `tests/ai/test_evidence_check.py` | Tests for prerequisite evidence verification, hallucination dropping, and audit trail logging | [x] | [x] |
+| 2026-09-26 | `conftest.py` | Pytest environment loader ensuring .env variables are available at test collection time | [x] | [x] |
 
 
 
