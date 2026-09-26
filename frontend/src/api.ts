@@ -1,6 +1,7 @@
 import type { Board, Task, Dependency, TaskExplanation, AISuggestion, DownstreamChange, ColumnType, ImpactPreviewResponse } from "./types";
 
-const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "") + "/api";
+const rawApiUrl = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+const API_BASE = rawApiUrl.endsWith("/api") ? rawApiUrl : `${rawApiUrl}/api`;
 
 export class ApiRequestError extends Error {
   code: string;

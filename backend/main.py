@@ -81,7 +81,16 @@ app.include_router(tasks_router, prefix="/api")
 app.include_router(dependencies_router, prefix="/api")
 
 
-@app.get("/api/health")
+@app.get("/")
+def root():
+    return {
+        "message": "TaskFlow Pro API is running",
+        "status": "healthy",
+        "docs": "/docs",
+        "health": "/api/health",
+    }
 
+
+@app.get("/api/health")
 def health_check():
     return {"status": "ok"}
