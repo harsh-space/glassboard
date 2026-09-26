@@ -24,6 +24,7 @@ import { AISuggestionsDrawer } from "./components/AISuggestionsDrawer";
 import { RippleToast } from "./components/RippleToast";
 import { LoginScreen } from "./components/LoginScreen";
 import { BoardDashboard } from "./components/BoardDashboard";
+import { SetUsernameModal } from "./components/SetUsernameModal";
 import { Sparkles, Plus, AlertCircle, GitBranch, LayoutGrid, ChevronLeft } from "lucide-react";
 
 type AppScreen = "login" | "dashboard" | "board";
@@ -98,6 +99,23 @@ export const App: React.FC = () => {
     setSuggestions([]);
     setDownstreamChanges([]);
     setErrorMessage(null);
+  };
+
+  const isTempUsername = authUser?.username ? authUser.username.startsWith("temp_") : false;
+
+  const handleUsernameUpdated = (newUsername: string) => {
+    if (authUser) {
+      const updated: AuthUser = { ...authUser, username: newUsername };
+      setAuthUser(updated);
+      localStorage.setItem(
+        "auth_user",
+        JSON.stringify({
+          user_id: updated.user_id,
+          username: updated.username,
+          email: updated.email,
+        })
+      );
+    }
   };
 
   const sensors = useSensors(
@@ -210,11 +228,17 @@ export const App: React.FC = () => {
 
   if (screen === "dashboard") {
     return (
-      <BoardDashboard
-        user={authUser!}
-        onSelectBoard={handleSelectBoard}
-        onLogout={handleLogout}
-      />
+      <>
+        <BoardDashboard
+          user={authUser!}
+          onSelectBoard={handleSelectBoard}
+          onLogout={handleLogout}
+        />
+        <SetUsernameModal
+          isOpen={isTempUsername}
+          onUsernameUpdated={handleUsernameUpdated}
+        />
+      </>
     );
   }
 
@@ -524,6 +548,12 @@ export const App: React.FC = () => {
           loadBoard();
           if (changes && changes.length > 0) setDownstreamChanges(changes);
         }}
+      />
+
+      {/* Choose Username Modal (if user still has temporary handle) */}
+      <SetUsernameModal
+        isOpen={isTempUsername}
+        onUsernameUpdated={handleUsernameUpdated}
       />
     </div>
   );

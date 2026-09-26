@@ -86,10 +86,10 @@ export interface BoardSummary {
 }
 
 export const authApi = {
-  register: (email: string, username: string, password: string): Promise<AuthUser> =>
+  register: (email: string, password: string, username?: string): Promise<AuthUser> =>
     request<AuthUser>("/auth/register", {
       method: "POST",
-      body: JSON.stringify({ email, username, password }),
+      body: JSON.stringify({ email, password, ...(username ? { username } : {}) }),
     }),
 
   login: (email: string, password: string): Promise<AuthUser> =>
@@ -100,6 +100,12 @@ export const authApi = {
 
   me: (): Promise<{ user_id: number; username: string; email: string }> =>
     request("/auth/me"),
+
+  updateUsername: (username: string): Promise<{ user_id: number; username: string; email: string }> =>
+    request<{ user_id: number; username: string; email: string }>("/auth/username", {
+      method: "PATCH",
+      body: JSON.stringify({ username }),
+    }),
 
   listBoards: (): Promise<BoardSummary[]> =>
     request<BoardSummary[]>("/auth/boards"),

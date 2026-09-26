@@ -61,3 +61,24 @@ def test_auth_full_flow():
     assert new_board_res.status_code == 201, new_board_res.text
     new_board = new_board_res.json()
     assert new_board["name"] == f"Project {suffix}"
+
+    # 7. Register without username (auto-generated temp username)
+    temp_suffix = uuid.uuid4().hex[:8]
+    temp_reg = client.post("/api/auth/register", json={
+        "email": f"temp_{temp_suffix}@example.com",
+        "password": "password123"
+    })
+    assert temp_reg.status_code == 201, temp_reg.text
+    temp_data = temp_reg.json()
+    assert temp_data["username"].startswith("temp_")
+    temp_token = temp_data["access_token"]
+    temp_headers = {"Authorization": f"Bearer {temp_token}"}
+
+    # 8. Update username to final chosen username
+    final_username = f"final_user_{temp_suffix}"
+    update_res = client.patch("/api/auth/username", headers=temp_headers, json={
+        "username": final_username
+    })
+    assert update_res.status_code == 200, update_res.text
+    assert update_res.json()["username"] == final_username
+

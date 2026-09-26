@@ -61,10 +61,6 @@ export const BoardDashboard: React.FC<Props> = ({ user, onSelectBoard, onLogout 
 
   return (
     <div style={styles.page}>
-      {/* Background */}
-      <div style={styles.bgGradient} />
-      <div style={styles.bgOrb} />
-
       {/* Navbar */}
       <header style={styles.navbar}>
         <div style={styles.navLogo}>
@@ -230,29 +226,24 @@ export const BoardDashboard: React.FC<Props> = ({ user, onSelectBoard, onLogout 
 
       <style>{`
         @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(20px); }
+          from { opacity: 0; transform: translateY(12px); }
           to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes orbFloat {
-          0%, 100% { transform: translateY(0); }
-          50%       { transform: translateY(-25px); }
         }
         #create-board-btn:hover,
         #empty-create-btn:hover,
         #confirm-create-board:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
+          background-color: var(--color-primary-active) !important;
         }
         #logout-btn:hover { background: var(--color-surface-soft) !important; }
         [id^="board-card-"]:hover {
           border-color: var(--color-primary) !important;
-          box-shadow: 0 8px 32px rgba(99, 102, 241, 0.14) !important;
-          transform: translateY(-2px);
+          box-shadow: var(--shadow-md) !important;
+          transform: translateY(-1px);
         }
         #new-board-name:focus, #new-board-date:focus {
           outline: none;
           border-color: var(--color-primary) !important;
-          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+          box-shadow: 0 0 0 2px var(--color-primary-light);
         }
       `}</style>
     </div>
@@ -262,28 +253,8 @@ export const BoardDashboard: React.FC<Props> = ({ user, onSelectBoard, onLogout 
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
-    background: "var(--color-bg)",
+    background: "var(--color-canvas)",
     position: "relative",
-    overflow: "hidden",
-  },
-  bgGradient: {
-    position: "fixed",
-    inset: 0,
-    background: "radial-gradient(ellipse 90% 50% at 50% -5%, rgba(99,102,241,0.14) 0%, transparent 65%)",
-    pointerEvents: "none",
-    zIndex: 0,
-  },
-  bgOrb: {
-    position: "fixed",
-    width: "600px",
-    height: "600px",
-    borderRadius: "50%",
-    background: "radial-gradient(circle, rgba(139,92,246,0.08) 0%, transparent 70%)",
-    bottom: "-200px",
-    right: "-100px",
-    animation: "orbFloat 12s ease-in-out infinite",
-    pointerEvents: "none",
-    zIndex: 0,
   },
   navbar: {
     position: "relative",

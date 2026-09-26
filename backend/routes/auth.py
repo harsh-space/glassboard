@@ -48,8 +48,12 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 class RegisterRequest(BaseModel):
     email: str
-    username: str
+    username: Optional[str] = None
     password: str
+
+
+class UpdateUsernameRequest(BaseModel):
+    username: str
 
 
 class LoginRequest(BaseModel):
@@ -83,18 +87,13 @@ class CreateBoardRequest(BaseModel):
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
+    import uuid
     clean_email = payload.email.lower().strip()
-    clean_username = payload.username.strip()
 
     if not clean_email or "@" not in clean_email:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"code": "INVALID_EMAIL", "message": "Please enter a valid email address.", "details": {}},
-        )
-    if not clean_username:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"code": "INVALID_USERNAME", "message": "Username cannot be empty.", "details": {}},
         )
     if len(payload.password) < 6:
         raise HTTPException(
@@ -107,11 +106,17 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "EMAIL_TAKEN", "message": "This email is already registered.", "details": {}},
         )
-    if db.query(User).filter(User.username == clean_username).first():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"code": "USERNAME_TAKEN", "message": "This username is already taken.", "details": {}},
-        )
+
+    if payload.username and payload.username.strip():
+        clean_username = payload.username.strip()
+        if db.query(User).filter(User.username == clean_username).first():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"code": "USERNAME_TAKEN", "message": "This username is already taken.", "details": {}},
+            )
+    else:
+        # Generate temporary username
+        clean_username = f"temp_{uuid.uuid4().hex[:8]}"
 
     user = User(
         email=clean_email,
@@ -129,6 +134,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
         username=user.username,
         email=user.email,
     )
+
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -181,6 +187,40 @@ def me(current_user: User = Depends(get_current_user)):
         "username": current_user.username,
         "email": current_user.email,
     }
+
+
+@router.patch("/username")
+def update_username(
+    payload: UpdateUsernameRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    new_username = payload.username.strip()
+    if not new_username or len(new_username) < 3:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "INVALID_USERNAME", "message": "Username must be at least 3 characters.", "details": {}},
+        )
+    if new_username.startswith("temp_"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "INVALID_USERNAME", "message": "Username cannot start with 'temp_'.", "details": {}},
+        )
+    existing = db.query(User).filter(User.username == new_username, User.id != current_user.id).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "USERNAME_TAKEN", "message": "This username is already taken. Please choose another.", "details": {}},
+        )
+    current_user.username = new_username
+    db.commit()
+    db.refresh(current_user)
+    return {
+        "user_id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+    }
+
 
 
 # ── Board Management (per user) ───────────────────────────────────────────────
