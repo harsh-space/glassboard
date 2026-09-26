@@ -536,73 +536,93 @@ export const App: React.FC = () => {
           <div
             style={{
               marginTop: "20px",
-              background: "#fffbfb",
-              border: "1.5px solid #fca5a5",
-              borderRadius: "var(--radius-md)",
+              background: "var(--color-surface-soft)",
+              border: "1px solid var(--color-hairline)",
+              borderLeft: "4px solid var(--color-error)",
+              borderRadius: "var(--radius-lg)",
               padding: "14px 20px",
-              boxShadow: "0 4px 16px rgba(220, 38, 38, 0.08)",
+              boxShadow: "var(--shadow-sm)",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              gap: "16px",
-              animation: "slideUp 0.2s ease",
+              gap: "20px",
+              animation: "slideUp 0.2s ease-out",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "14px", flex: 1, minWidth: 0, flexWrap: "wrap" }}>
               <div
                 style={{
-                  width: "36px",
-                  height: "36px",
-                  borderRadius: "8px",
-                  background: "rgba(220, 38, 38, 0.1)",
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "var(--radius-pill)",
+                  background: "var(--color-error-bg)",
+                  border: "1px solid var(--color-error-border)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   flexShrink: 0,
                 }}
               >
-                <Lock size={18} color="#b91c1c" />
+                <Lock size={15} color="var(--color-error)" />
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                   <span
                     style={{
+                      fontFamily: "var(--font-sans)",
                       fontSize: "11px",
-                      fontFamily: "var(--font-mono)",
-                      fontWeight: 700,
+                      fontWeight: 600,
+                      color: "var(--color-error)",
+                      background: "var(--color-error-bg)",
+                      border: "1px solid var(--color-error-border)",
+                      padding: "2px 8px",
+                      borderRadius: "var(--radius-pill)",
                       textTransform: "uppercase",
                       letterSpacing: "0.5px",
-                      color: "#991b1b",
-                      background: "rgba(220, 38, 38, 0.1)",
-                      padding: "2px 7px",
-                      borderRadius: "4px",
                     }}
                   >
                     {movementBanner.title}
                   </span>
 
                   {movementBanner.taskId && (
-                    <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-ink)" }}>
-                      T{movementBanner.taskId} {movementBanner.taskTitle}
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span
+                        style={{
+                          fontFamily: "var(--font-mono)",
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          padding: "2px 6px",
+                          borderRadius: "4px",
+                          background: "rgba(0,0,0,0.05)",
+                          color: "var(--color-muted)",
+                        }}
+                      >
+                        T{movementBanner.taskId}
+                      </span>
+                      <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--color-ink)" }}>
+                        {movementBanner.taskTitle}
+                      </span>
                       {movementBanner.targetColumn && (
-                        <span style={{ color: "var(--color-muted)", fontWeight: 400 }}>
-                          {" "}→{" "}
+                        <span style={{ fontSize: "13px", color: "var(--color-muted)" }}>
+                          →{" "}
                           <strong style={{ color: "var(--color-ink)", fontWeight: 600 }}>
                             {movementBanner.targetColumn}
                           </strong>
                         </span>
                       )}
-                    </span>
+                    </div>
                   )}
                 </div>
 
-                <div style={{ fontSize: "13px", color: "var(--color-body)", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <div style={{ fontSize: "13px", color: "var(--color-body)", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                   <span>{movementBanner.reason}</span>
 
                   {movementBanner.blockingTasks && movementBanner.blockingTasks.length > 0 && (
                     <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                      <span style={{ fontSize: "12px", color: "var(--color-muted)", fontWeight: 500 }}>Unfinished prerequisites:</span>
+                      <span style={{ fontSize: "12px", color: "var(--color-muted)", fontWeight: 500 }}>
+                        Unfinished:
+                      </span>
                       {movementBanner.blockingTasks.map((pt) => (
                         <button
                           key={pt.id}
@@ -614,21 +634,36 @@ export const App: React.FC = () => {
                           style={{
                             display: "inline-flex",
                             alignItems: "center",
-                            gap: "4px",
-                            background: "rgba(220, 38, 38, 0.08)",
-                            border: "1px solid rgba(220, 38, 38, 0.2)",
-                            borderRadius: "4px",
-                            padding: "2px 7px",
+                            gap: "5px",
+                            background: "var(--color-surface-card)",
+                            border: "1px solid var(--color-hairline)",
+                            borderRadius: "var(--radius-sm)",
+                            padding: "3px 8px",
                             fontSize: "12px",
-                            fontWeight: 600,
-                            color: "#991b1b",
+                            fontWeight: 500,
+                            color: "var(--color-ink)",
                             cursor: "pointer",
-                            transition: "all 0.1s ease",
+                            transition: "all 0.15s ease",
                           }}
-                          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(220, 38, 38, 0.16)")}
-                          onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(220, 38, 38, 0.08)")}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = "var(--color-primary)";
+                            e.currentTarget.style.background = "var(--color-surface-card-hover)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = "var(--color-hairline)";
+                            e.currentTarget.style.background = "var(--color-surface-card)";
+                          }}
                         >
-                          <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", opacity: 0.8 }}>T{pt.id}</span>
+                          <span
+                            style={{
+                              fontFamily: "var(--font-mono)",
+                              fontSize: "10px",
+                              fontWeight: 600,
+                              color: "var(--color-muted)",
+                            }}
+                          >
+                            T{pt.id}
+                          </span>
                           <span>{pt.title}</span>
                         </button>
                       ))}
@@ -637,7 +672,9 @@ export const App: React.FC = () => {
 
                   {movementBanner.affectedTasks && movementBanner.affectedTasks.length > 0 && (
                     <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                      <span style={{ fontSize: "12px", color: "var(--color-muted)", fontWeight: 500 }}>Affects:</span>
+                      <span style={{ fontSize: "12px", color: "var(--color-muted)", fontWeight: 500 }}>
+                        Affects:
+                      </span>
                       {movementBanner.affectedTasks.map((at) => (
                         <button
                           key={at.id}
@@ -649,21 +686,36 @@ export const App: React.FC = () => {
                           style={{
                             display: "inline-flex",
                             alignItems: "center",
-                            gap: "4px",
-                            background: "rgba(220, 38, 38, 0.08)",
-                            border: "1px solid rgba(220, 38, 38, 0.2)",
-                            borderRadius: "4px",
-                            padding: "2px 7px",
+                            gap: "5px",
+                            background: "var(--color-surface-card)",
+                            border: "1px solid var(--color-hairline)",
+                            borderRadius: "var(--radius-sm)",
+                            padding: "3px 8px",
                             fontSize: "12px",
-                            fontWeight: 600,
-                            color: "#991b1b",
+                            fontWeight: 500,
+                            color: "var(--color-ink)",
                             cursor: "pointer",
-                            transition: "all 0.1s ease",
+                            transition: "all 0.15s ease",
                           }}
-                          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(220, 38, 38, 0.16)")}
-                          onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(220, 38, 38, 0.08)")}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = "var(--color-primary)";
+                            e.currentTarget.style.background = "var(--color-surface-card-hover)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = "var(--color-hairline)";
+                            e.currentTarget.style.background = "var(--color-surface-card)";
+                          }}
                         >
-                          <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", opacity: 0.8 }}>T{at.id}</span>
+                          <span
+                            style={{
+                              fontFamily: "var(--font-mono)",
+                              fontSize: "10px",
+                              fontWeight: 600,
+                              color: "var(--color-muted)",
+                            }}
+                          >
+                            T{at.id}
+                          </span>
                           <span>{at.title}</span>
                         </button>
                       ))}
@@ -679,11 +731,11 @@ export const App: React.FC = () => {
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: "4px",
+                gap: "5px",
                 padding: "6px 12px",
-                borderRadius: "6px",
-                border: "1px solid rgba(0,0,0,0.08)",
-                background: "white",
+                borderRadius: "var(--radius-sm)",
+                border: "1px solid var(--color-hairline)",
+                background: "var(--color-surface-card)",
                 color: "var(--color-muted)",
                 fontSize: "12px",
                 fontWeight: 600,
@@ -693,11 +745,13 @@ export const App: React.FC = () => {
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.color = "var(--color-ink)";
-                e.currentTarget.style.borderColor = "rgba(0,0,0,0.18)";
+                e.currentTarget.style.borderColor = "var(--color-body-strong)";
+                e.currentTarget.style.background = "var(--color-surface-card-hover)";
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.color = "var(--color-muted)";
-                e.currentTarget.style.borderColor = "rgba(0,0,0,0.08)";
+                e.currentTarget.style.borderColor = "var(--color-hairline)";
+                e.currentTarget.style.background = "var(--color-surface-card)";
               }}
             >
               <X size={14} />
