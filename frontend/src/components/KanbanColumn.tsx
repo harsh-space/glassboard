@@ -31,8 +31,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
       ref={setNodeRef}
       style={{
         flex: 1,
-        minWidth: "280px",
-        maxWidth: "340px",
+        minWidth: "260px",
         background: isOver ? "var(--color-surface-cream-strong)" : "var(--color-surface-soft)",
         border: isOver ? "1.5px dashed var(--color-primary)" : "1px solid var(--color-hairline)",
         borderRadius: "var(--radius-lg)",

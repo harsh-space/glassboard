@@ -502,7 +502,7 @@ export const App: React.FC = () => {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <div style={{ display: "flex", gap: "20px", alignItems: "flex-start" }}>
+          <div style={{ display: "flex", gap: "20px", alignItems: "flex-start", width: "100%" }}>
             {columns.map((col) => {
               const colTasks = (board?.tasks || []).filter((t) => t.column === col.id);
               return (
