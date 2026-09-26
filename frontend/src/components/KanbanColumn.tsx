@@ -102,7 +102,6 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
               allTasks={allTasks}
               isCriticalPath={criticalPathIds.includes(task.id)}
               hasInvariantViolation={invariantTaskIds.includes(task.id)}
-              invariantReason={invariantData[task.id]?.reason}
               invariantAffectedTaskIds={invariantData[task.id]?.affectedTaskIds}
               onClick={onCardClick}
             />

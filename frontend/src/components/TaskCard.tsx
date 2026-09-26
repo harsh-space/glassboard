@@ -9,7 +9,6 @@ interface TaskCardProps {
   allTasks: Task[];
   isCriticalPath?: boolean;
   hasInvariantViolation?: boolean;
-  invariantReason?: string;
   invariantAffectedTaskIds?: number[];
   onClick: (task: Task) => void;
 }
@@ -19,7 +18,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   allTasks,
   isCriticalPath,
   hasInvariantViolation,
-  invariantReason,
   invariantAffectedTaskIds = [],
   onClick,
 }) => {
