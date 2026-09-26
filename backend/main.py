@@ -16,6 +16,10 @@ from backend.routes.tasks import router as tasks_router
 from backend.routes.dependencies import router as dependencies_router
 from backend.routes.auth import router as auth_router
 
+# Ensure all models are registered with Base before create_all
+import backend.models  # noqa: F401  (registers User, Board, Task, Dependency, etc.)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
