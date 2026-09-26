@@ -61,7 +61,7 @@ export const App: React.FC = () => {
   const [downstreamChanges, setDownstreamChanges] = useState<DownstreamChange[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [invariantTaskIds, setInvariantTaskIds] = useState<number[]>([]);
-  const [invariantReasons, setInvariantReasons] = useState<Record<number, string>>({});
+  const [invariantData, setInvariantData] = useState<Record<number, { reason: string; affectedTaskIds: number[] }>>({}); 
 
   // On mount: restore session
   useEffect(() => {
@@ -220,11 +220,16 @@ export const App: React.FC = () => {
         // Parse human-readable reason from violation details
         const violations: string[] = err.details?.violations || [];
         const reason = parseInvariantReason(violations, taskId);
+        // Extract affected task IDs from BLOCKED_TASK_ADVANCED:X violations
+        const affectedTaskIds = violations
+          .filter((v) => v.startsWith("BLOCKED_TASK_ADVANCED:"))
+          .map((v) => parseInt(v.split(":")[1], 10))
+          .filter((id) => !isNaN(id));
         setInvariantTaskIds((prev) => [...prev.filter((id) => id !== taskId), taskId]);
-        setInvariantReasons((prev) => ({ ...prev, [taskId]: reason }));
+        setInvariantData((prev) => ({ ...prev, [taskId]: { reason, affectedTaskIds } }));
         setTimeout(() => {
           setInvariantTaskIds((prev) => prev.filter((id) => id !== taskId));
-          setInvariantReasons((prev) => { const n = { ...prev }; delete n[taskId]; return n; });
+          setInvariantData((prev) => { const n = { ...prev }; delete n[taskId]; return n; });
         }, 5000);
       } else if (err?.code === "TASK_BLOCKED") {
         setErrorMessage(err.message || "Task is blocked by unfinished prerequisites.");
@@ -487,7 +492,7 @@ export const App: React.FC = () => {
                   allTasks={board?.tasks || []}
                   criticalPathIds={criticalPathIds}
                   invariantTaskIds={invariantTaskIds}
-                  invariantReasons={invariantReasons}
+                  invariantData={invariantData}
                   onCardClick={(task) => setSelectedTask(task)}
                 />
               );

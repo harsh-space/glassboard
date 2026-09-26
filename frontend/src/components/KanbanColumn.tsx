@@ -11,7 +11,7 @@ interface KanbanColumnProps {
   allTasks: Task[];
   criticalPathIds: number[];
   invariantTaskIds?: number[];
-  invariantReasons?: Record<number, string>;
+  invariantData?: Record<number, { reason: string; affectedTaskIds: number[] }>;
   onCardClick: (task: Task) => void;
 }
 
@@ -22,7 +22,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
   allTasks,
   criticalPathIds,
   invariantTaskIds = [],
-  invariantReasons = {},
+  invariantData = {},
   onCardClick,
 }) => {
   const { setNodeRef, isOver } = useDroppable({
@@ -102,7 +102,8 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
               allTasks={allTasks}
               isCriticalPath={criticalPathIds.includes(task.id)}
               hasInvariantViolation={invariantTaskIds.includes(task.id)}
-              invariantReason={invariantReasons[task.id]}
+              invariantReason={invariantData[task.id]?.reason}
+              invariantAffectedTaskIds={invariantData[task.id]?.affectedTaskIds}
               onClick={onCardClick}
             />
           ))}
