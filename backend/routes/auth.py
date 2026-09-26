@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 
 from backend.db import SessionLocal
@@ -71,8 +71,7 @@ class BoardSummary(BaseModel):
     start_date: date
     task_count: int = 0
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CreateBoardRequest(BaseModel):
@@ -84,15 +83,18 @@ class CreateBoardRequest(BaseModel):
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.email == payload.email).first():
+    clean_email = payload.email.lower().strip()
+    clean_username = payload.username.strip()
+
+    if not clean_email or "@" not in clean_email:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"code": "EMAIL_TAKEN", "message": "This email is already registered.", "details": {}},
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "INVALID_EMAIL", "message": "Please enter a valid email address.", "details": {}},
         )
-    if db.query(User).filter(User.username == payload.username).first():
+    if not clean_username:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"code": "USERNAME_TAKEN", "message": "This username is already taken.", "details": {}},
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "INVALID_USERNAME", "message": "Username cannot be empty.", "details": {}},
         )
     if len(payload.password) < 6:
         raise HTTPException(
@@ -100,9 +102,20 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
             detail={"code": "WEAK_PASSWORD", "message": "Password must be at least 6 characters.", "details": {}},
         )
 
+    if db.query(User).filter(User.email == clean_email).first():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "EMAIL_TAKEN", "message": "This email is already registered.", "details": {}},
+        )
+    if db.query(User).filter(User.username == clean_username).first():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "USERNAME_TAKEN", "message": "This username is already taken.", "details": {}},
+        )
+
     user = User(
-        email=payload.email.lower().strip(),
-        username=payload.username.strip(),
+        email=clean_email,
+        username=clean_username,
         hashed_password=hash_password(payload.password),
     )
     db.add(user)
@@ -120,7 +133,8 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == payload.email.lower().strip()).first()
+    ident = payload.email.lower().strip()
+    user = db.query(User).filter((User.email == ident) | (User.username == payload.email.strip())).first()
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -144,7 +158,8 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 # OAuth2 token endpoint (for Swagger UI compatibility)
 @router.post("/token", response_model=TokenResponse)
 def token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == form_data.username.lower().strip()).first()
+    ident = form_data.username.lower().strip()
+    user = db.query(User).filter((User.email == ident) | (User.username == form_data.username.strip())).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -172,7 +187,12 @@ def me(current_user: User = Depends(get_current_user)):
 
 @router.get("/boards", response_model=list[BoardSummary])
 def list_boards(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    boards = db.query(Board).filter(Board.owner_id == current_user.id).all()
+    boards = (
+        db.query(Board)
+        .filter((Board.owner_id == current_user.id) | (Board.owner_id.is_(None)))
+        .order_by(Board.id)
+        .all()
+    )
     result = []
     for b in boards:
         result.append(BoardSummary(

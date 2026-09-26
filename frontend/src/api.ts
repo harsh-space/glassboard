@@ -22,30 +22,44 @@ function getAuthHeaders(): Record<string, string> {
 
 async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...getAuthHeaders(),
-      ...(options?.headers || {}),
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeaders(),
+        ...(options?.headers || {}),
+      },
+    });
+  } catch (err: any) {
+    throw new ApiRequestError(
+      "NETWORK_ERROR",
+      "Unable to reach the server. If the service is spinning up, please wait a moment and try again."
+    );
+  }
 
   if (response.status === 204) {
     return {} as T;
   }
 
-  const data = await response.json();
+  let data: any = null;
+  try {
+    data = await response.json();
+  } catch {
+    // Non-JSON response (e.g. text/html from proxy/gateway)
+    data = null;
+  }
 
   if (!response.ok) {
-    // FastAPI raises HTTPException with detail={code, message, details}
-    // Fall back to a generic format otherwise
-    const detail = data.detail || data.error;
+    const detail = data?.detail || data?.error;
     const err = typeof detail === "object" && detail?.code
       ? detail
       : {
           code: `HTTP_${response.status}`,
-          message: typeof detail === "string" ? detail : "An unexpected error occurred.",
+          message: typeof detail === "string" 
+            ? detail 
+            : (data?.message || `Server returned error (${response.status}). Please try again.`),
           details: {},
         };
     throw new ApiRequestError(err.code, err.message, err.details);

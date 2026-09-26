@@ -50,6 +50,19 @@ async def lifespan(app: FastAPI):
         db.close()
     except Exception:
         pass
+
+    # Ensure PostgreSQL sequences match MAX(id)
+    try:
+        db = SessionLocal()
+        for tbl, seq in [("task", "task_id_seq"), ("board", "board_id_seq"), ("dependency", "dependency_id_seq"), ("\"user\"", "user_id_seq")]:
+            try:
+                db.execute(text(f"SELECT setval('{seq}', COALESCE((SELECT MAX(id) FROM {tbl}), 1))"))
+            except Exception:
+                pass
+        db.commit()
+        db.close()
+    except Exception:
+        pass
     yield
 
 
@@ -106,6 +119,23 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             }
         },
     )
+
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    import traceback
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "error": {
+                "code": "INTERNAL_SERVER_ERROR",
+                "message": str(exc) or "An internal server error occurred.",
+                "details": {},
+            }
+        },
+    )
+
 
 
 # Mount routers under /api
