@@ -104,4 +104,16 @@ def root():
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "ok"}
+    db_status = "ok"
+    try:
+        from sqlalchemy import text
+        from backend.db import SessionLocal
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+    except Exception as e:
+        db_status = f"unhealthy: {e}"
+    return {
+        "status": "ok",
+        "database": db_status,
+    }
