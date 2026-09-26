@@ -23,14 +23,17 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="TaskFlow Pro API", version="1.0.0", lifespan=lifespan)
 
 
-# CORS configuration: support comma-separated origins (local dev + Vercel deployment)
+# CORS configuration: allow local dev + any Vercel deployment automatically
 raw_origins = os.getenv("ALLOWED_ORIGIN", os.getenv("FRONTEND_ORIGIN", "http://localhost:5173"))
-allowed_origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+allowed_origins = [o.strip().rstrip("/") for o in raw_origins.split(",") if o.strip()]
+is_wildcard = "*" in allowed_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_origins=["*"] if is_wildcard else allowed_origins,
+    allow_origin_regex=None if is_wildcard else r"^https?://.*\.vercel\.app$|^http://localhost(:\d+)?$",
+    allow_credentials=not is_wildcard,
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 

@@ -15,4 +15,4 @@ services:
       - key: LLM_MODEL_NAME
         value: allam-2-7b
       - key: ALLOWED_ORIGIN
-        value: http://localhost:5173
+        value: "*"
