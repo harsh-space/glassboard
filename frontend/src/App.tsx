@@ -230,7 +230,7 @@ export const App: React.FC = () => {
         setTimeout(() => {
           setInvariantTaskIds((prev) => prev.filter((id) => id !== taskId));
           setInvariantData((prev) => { const n = { ...prev }; delete n[taskId]; return n; });
-        }, 5000);
+        }, 3000);
       } else if (err?.code === "TASK_BLOCKED") {
         setErrorMessage(err.message || "Task is blocked by unfinished prerequisites.");
       } else {

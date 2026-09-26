@@ -91,22 +91,36 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           T{task.id}
         </span>
 
-        {/* Invariant chip */}
+        {/* Invariant chip + inline task reason */}
         {hasInvariantViolation && (
-          <span
-            style={{
-              ...chipBase,
-              color: "#b91c1c",
-              background: "rgba(220,38,38,0.08)",
-              border: "1px solid rgba(220,38,38,0.25)",
-              display: "flex",
-              alignItems: "center",
-              gap: "3px",
-            }}
-          >
-            <AlertTriangle size={11} />
-            Invariant
-          </span>
+          <>
+            <span
+              style={{
+                ...chipBase,
+                color: "#b91c1c",
+                background: "rgba(220,38,38,0.08)",
+                border: "1px solid rgba(220,38,38,0.25)",
+                display: "flex",
+                alignItems: "center",
+                gap: "3px",
+              }}
+            >
+              <AlertTriangle size={11} />
+              Invariant
+            </span>
+            {invariantAffectedTaskIds.length > 0 && (
+              <span
+                style={{
+                  fontSize: "11px",
+                  color: "#b91c1c",
+                  opacity: 0.75,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {invariantAffectedTaskIds.map((id) => `T${id}`).join(", ")} blocked
+              </span>
+            )}
+          </>
         )}
 
         {/* Critical Path chip */}
@@ -127,61 +141,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         )}
       </div>
 
-      {/* ── Invariant detail row: reason + affected T# chips ── */}
-      {hasInvariantViolation && (invariantReason || invariantAffectedTaskIds.length > 0) && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "5px",
-            flexWrap: "wrap",
-            marginBottom: "10px",
-          }}
-        >
-          {/* Reason text chip */}
-          {invariantReason && (
-            <span
-              style={{
-                ...chipBase,
-                fontFamily: "var(--font-sans, system-ui)",
-                fontWeight: 500,
-                color: "#b91c1c",
-                background: "rgba(220,38,38,0.05)",
-                border: "1px solid rgba(220,38,38,0.18)",
-              }}
-            >
-              {invariantReason}
-            </span>
-          )}
 
-          {/* Affected task T# chips */}
-          {invariantAffectedTaskIds.map((affId) => (
-            <span
-              key={affId}
-              style={{
-                ...chipBase,
-                color: "#b91c1c",
-                background: "rgba(220,38,38,0.08)",
-                border: "1px solid rgba(220,38,38,0.22)",
-              }}
-            >
-              T{affId}
-            </span>
-          ))}
-
-          {invariantAffectedTaskIds.length > 0 && (
-            <span
-              style={{
-                fontSize: "11px",
-                color: "#b91c1c",
-                opacity: 0.8,
-              }}
-            >
-              would be blocked
-            </span>
-          )}
-        </div>
-      )}
 
       {/* ── Title ── */}
       <div
