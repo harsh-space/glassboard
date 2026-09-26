@@ -15,7 +15,7 @@ import type {
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 
 import type { Board, Task, ColumnType, AISuggestion, DownstreamChange } from "./types";
-import { api, authApi, type AuthUser } from "./api";
+import { api, type AuthUser } from "./api";
 import { KanbanColumn } from "./components/KanbanColumn";
 import { TaskCard } from "./components/TaskCard";
 import { TaskDetailModal } from "./components/TaskDetailModal";
