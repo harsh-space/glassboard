@@ -17,7 +17,8 @@
    cd frontend && npm run dev
    ```
 2. Open browser to `http://localhost:5173`.
-3. Have the browser console or network tab visible if desired.
+3. On the login screen, click **"Continue as Guest / View Demo Board"** to land directly on the canonical 10-task board (no credentials required for evaluators).
+4. Have the browser console or network tab visible if desired.
 
 ---
 

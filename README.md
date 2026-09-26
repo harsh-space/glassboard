@@ -3,6 +3,8 @@
 > **A DAG-Enforced, Dependency-Aware Kanban Board**  
 > *Correctness first: the board never shows a state that contradicts the dependency graph. Trust always: every automatic schedule change is fully explained.*
 
+**Live Demo:** [https://glassboard-ten.vercel.app](https://glassboard-ten.vercel.app) | **API Docs:** [https://glassboard-backend.onrender.com/docs](https://glassboard-backend.onrender.com/docs)
+
 ---
 
 ## 1. Executive Summary
@@ -46,6 +48,7 @@ FastAPI Backend (port 8000)
 - **Clean Layer Separation:** The `engine/` package has zero dependencies on FastAPI, SQLAlchemy, or SQLite. It is 100% testable in isolation.
 - **Derived State:** `blocked`, `ready`, `driving_prerequisite_id`, and `slack` are never stored in the database; they are dynamically computed on every read to guarantee zero drift.
 - **Optimistic Concurrency:** Every task update carries an incremental `version` tag. Concurrent edits trigger `409 VERSION_CONFLICT` instead of silent overwrites.
+- **Authentication & Guest Mode:** Multi-user authentication (JWT with bcrypt) enables personal board creation and management, while a prominent **"Continue as Guest / View Demo Board"** bypass on the login screen provides instant, zero-barrier access directly to the canonical shared workspace (Board #1).
 
 ---
 
@@ -130,6 +133,8 @@ python scripts/measure_ai.py
 
 ## 5. Walkthrough Demo Scenarios
 
+> **Access Note:** On first loading the application, you will see the authentication screen. Click **"Continue as Guest / View Demo Board"** to immediately access the canonical seeded board (Board #1) without creating an account or entering credentials. (You can also create an account to manage isolated personal boards).
+
 ### Scenario 1: Blocked Task Enforcement
 1. Locate Task 2 (`Database Schema Design`). Notice the **Blocked** badge indicating it depends on Task 1 (`Requirements Gathering`).
 2. Attempt to drag Task 2 to `In Progress` or `Done`.
@@ -170,4 +175,4 @@ Per `CLAUDE.md §8` and `docs/synopsis/06-risks.md`:
 
 ## 7. AI Disclosure
 
-Per hackathon requirements, detailed records of AI tool usage during development are maintained in [`AI_TOOL_DECLARATION.md`](file:///c:/Users/Harsh/Documents/GitHub/glassboard/AI_TOOL_DECLARATION.md). Every file assisted by AI was reviewed, verified, and backed by automated tests.
+Per hackathon requirements, detailed records of AI tool usage during development are maintained in [AI_TOOL_DECLARATION.md](AI_TOOL_DECLARATION.md). Every file assisted by AI was reviewed, verified, and backed by automated tests.

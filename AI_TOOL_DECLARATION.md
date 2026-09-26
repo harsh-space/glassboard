@@ -71,6 +71,14 @@ Model/provider used: **Groq API** running **`allam-2-7b`** (with automatic keywo
 | 2026-09-26 | `frontend/src/components/RippleToast.tsx` | Color scheme and theme consistency with global glassmorphic design | [x] | [x] |
 | 2026-09-26 | `frontend/src/index.css` | Custom dark-theme scrollbars, layout fixes, and component styling polish | [x] | [x] |
 | 2026-09-26 | `frontend/src/api.ts` | API client connection endpoints and request handling | [x] | [x] |
+| 2026-09-26 | `backend/auth.py` | JWT authentication utilities, password hashing with bcrypt, token generation and auth dependency | [x] | [x] |
+| 2026-09-26 | `backend/routes/auth.py` | Authentication and user board endpoints: register, login, me, username update, user boards | [x] | [x] |
+| 2026-09-26 | `frontend/src/components/LoginScreen.tsx` | Glassmorphic login/registration screen with guest mode bypass button | [x] | [x] |
+| 2026-09-26 | `frontend/src/components/BoardDashboard.tsx` | Multi-board selector dashboard for authenticated users with board creation | [x] | [x] |
+| 2026-09-26 | `frontend/src/components/SetUsernameModal.tsx` | Post-registration modal to prompt user to set a permanent username | [x] | [x] |
+| 2026-09-26 | `tests/api/test_auth.py` | Integration tests for full auth lifecycle, duplicate registration, board scoping, guest mode | [x] | [x] |
+| 2026-09-26 | `scripts/measure_performance.py` | Performance benchmark measuring scheduler and invariant check latency | [x] | [x] |
+| 2026-09-26 | `scripts/sync_seq.py` | Utility script to sync sequence IDs with seed database | [x] | [x] |
 
 
 

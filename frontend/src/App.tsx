@@ -122,8 +122,19 @@ export const App: React.FC = () => {
     setScreen("board");
   };
 
+  const handleGuestAccess = () => {
+    setActiveBoardId(1);
+    setBoard(null);
+    setLoading(true);
+    setScreen("board");
+  };
+
   const handleBackToDashboard = () => {
-    setScreen("dashboard");
+    if (authUser) {
+      setScreen("dashboard");
+    } else {
+      setScreen("login");
+    }
     setBoard(null);
     setShowCriticalPath(false);
     setCriticalPathIds([]);
@@ -319,7 +330,7 @@ export const App: React.FC = () => {
   // ── Screens ─────────────────────────────────────────────────────────────────
 
   if (screen === "login") {
-    return <LoginScreen onAuth={handleAuth} />;
+    return <LoginScreen onAuth={handleAuth} onGuestAccess={handleGuestAccess} />;
   }
 
   if (screen === "dashboard") {
@@ -391,7 +402,7 @@ export const App: React.FC = () => {
             }}
           >
             <ChevronLeft size={15} />
-            Boards
+            {authUser ? "Boards" : "Login / Exit"}
           </button>
 
           <div>

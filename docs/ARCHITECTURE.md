@@ -266,8 +266,12 @@ Per `BUILD_SPEC.md §8.3`:
 | SQLite write lock contention at >2 concurrent editors | Low for demo | Not fixed — use PostgreSQL for production |
 | AI rate limiter is in-process only (not distributed) | Medium if multi-process | Documented; replace with Redis for prod |
 | Heuristic performance meets targets (100% prec, 84.6% rec) | Low | Tuning complete (§5.3); LLM mode provides semantic reasoning |
-| Board anchored to fixed board_id=1 | Low for demo scope | Single-board design per spec |
+| Board anchored to fixed board_id=1 | Low for demo scope | Single-board design per spec (extended with multi-board auth) |
 | Production deployment target not confirmed | Low for local evaluation | Escalated per BUILD_SPEC.md §10 |
+
+### Multi-User Authentication & Canonical Guest Mode
+
+Multi-user authentication (via JWT with bcrypt password hashing in `backend/auth.py` and `backend/routes/auth.py`) was introduced beyond the original synopsis build target to enable user-specific board ownership, creation, and deletion in multi-tenant environments. To strictly preserve the synopsis's core promise of a single shared, zero-friction workspace, a dedicated **Guest Bypass** (`Continue as Guest / View Demo Board`) is integrated into `LoginScreen.tsx` and `App.tsx`. Guest sessions directly load the canonical seeded board (`id=1`, `owner_id=NULL`) with complete access to the DAG scheduling engine, Invariant Gate, and AI Copilot, guaranteeing that evaluators and demo runs are never blocked behind credentials.
 
 ---
 

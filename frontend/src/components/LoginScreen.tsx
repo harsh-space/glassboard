@@ -4,11 +4,12 @@ import { ArrowRight, AlertCircle } from "lucide-react";
 
 interface Props {
   onAuth: (user: AuthUser) => void;
+  onGuestAccess?: () => void;
 }
 
 type Mode = "login" | "register";
 
-export const LoginScreen: React.FC<Props> = ({ onAuth }) => {
+export const LoginScreen: React.FC<Props> = ({ onAuth, onGuestAccess }) => {
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -182,6 +183,49 @@ export const LoginScreen: React.FC<Props> = ({ onAuth }) => {
             {mode === "login" ? "Create one" : "Sign in"}
           </button>
         </p>
+
+        {onGuestAccess && (
+          <>
+            <div style={{ display: "flex", alignItems: "center", margin: "18px 0 14px", gap: "10px" }}>
+              <div style={{ flex: 1, height: "1px", background: "var(--color-hairline)" }} />
+              <span style={{ fontSize: "11px", color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>or</span>
+              <div style={{ flex: 1, height: "1px", background: "var(--color-hairline)" }} />
+            </div>
+
+            <button
+              type="button"
+              id="guest-access-btn"
+              onClick={onGuestAccess}
+              style={{
+                width: "100%",
+                padding: "10px 16px",
+                borderRadius: "var(--radius-sm)",
+                border: "1px solid var(--color-hairline)",
+                backgroundColor: "var(--color-surface-soft)",
+                color: "var(--color-body-strong)",
+                fontSize: "13px",
+                fontWeight: 600,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                transition: "all 0.15s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = "var(--color-surface-cream-strong)";
+                e.currentTarget.style.borderColor = "var(--color-primary)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "var(--color-surface-soft)";
+                e.currentTarget.style.borderColor = "var(--color-hairline)";
+              }}
+            >
+              <span>Continue as Guest / View Demo Board</span>
+              <ArrowRight size={14} color="var(--color-primary)" />
+            </button>
+          </>
+        )}
       </div>
 
       <style>{`

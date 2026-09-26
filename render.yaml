@@ -15,6 +15,6 @@ services:
       - key: LLM_MODEL_NAME
         value: allam-2-7b
       - key: ALLOWED_ORIGIN
-        value: "*"
+        value: https://glassboard-ten.vercel.app
       - key: JWT_SECRET_KEY
         sync: false
