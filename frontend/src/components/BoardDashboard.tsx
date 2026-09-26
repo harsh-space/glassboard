@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { authApi, type BoardSummary, type AuthUser } from "../api";
-import { Plus, LayoutGrid, LogOut, Clock, ChevronRight, Layers } from "lucide-react";
+import { Plus, LayoutGrid, LogOut, Clock, Trash2, Layers } from "lucide-react";
 
 interface Props {
   user: AuthUser;
@@ -16,6 +16,10 @@ export const BoardDashboard: React.FC<Props> = ({ user, onSelectBoard, onLogout 
   const [newBoardDate, setNewBoardDate] = useState(new Date().toISOString().split("T")[0]);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  const [boardToDelete, setBoardToDelete] = useState<BoardSummary | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     loadBoards();
@@ -51,6 +55,22 @@ export const BoardDashboard: React.FC<Props> = ({ user, onSelectBoard, onLogout 
       setCreating(false);
     }
   };
+
+  const confirmDelete = async () => {
+    if (!boardToDelete) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await authApi.deleteBoard(boardToDelete.id);
+      setBoards((prev) => prev.filter((b) => b.id !== boardToDelete.id));
+      setBoardToDelete(null);
+    } catch (err: any) {
+      setDeleteError(err.message || "Failed to delete board.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
 
   const initials = user.username
     .split(" ")
@@ -131,10 +151,18 @@ export const BoardDashboard: React.FC<Props> = ({ user, onSelectBoard, onLogout 
         ) : (
           <div style={styles.grid}>
             {boards.map((board) => (
-              <button
+              <div
                 key={board.id}
                 id={`board-card-${board.id}`}
+                role="button"
+                tabIndex={0}
                 onClick={() => onSelectBoard(board.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onSelectBoard(board.id);
+                  }
+                }}
                 style={styles.boardCard}
               >
                 {/* Board icon */}
@@ -157,8 +185,21 @@ export const BoardDashboard: React.FC<Props> = ({ user, onSelectBoard, onLogout 
                   </div>
                 </div>
 
-                <ChevronRight size={18} color="var(--color-muted)" style={{ flexShrink: 0 }} />
-              </button>
+                <button
+                  id={`delete-board-btn-${board.id}`}
+                  type="button"
+                  title={`Delete ${board.name}`}
+                  aria-label={`Delete ${board.name}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setBoardToDelete(board);
+                    setDeleteError(null);
+                  }}
+                  style={styles.deleteBtn}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
             ))}
           </div>
         )}
@@ -224,6 +265,51 @@ export const BoardDashboard: React.FC<Props> = ({ user, onSelectBoard, onLogout 
         </div>
       )}
 
+      {/* Delete Confirm Modal */}
+      {boardToDelete && (
+        <div style={styles.modalOverlay} onClick={() => { setBoardToDelete(null); setDeleteError(null); }}>
+          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ ...styles.modalTitle, color: "#e53e3e" }}>Delete Board</h2>
+            <p style={styles.modalSub}>
+              Are you sure you want to delete <strong>"{boardToDelete.name}"</strong>? This will permanently remove the board and all its tasks. This action cannot be undone.
+            </p>
+
+            {deleteError && (
+              <div style={styles.errorBox}>{deleteError}</div>
+            )}
+
+            <div style={styles.modalActions}>
+              <button
+                type="button"
+                onClick={() => { setBoardToDelete(null); setDeleteError(null); }}
+                style={styles.cancelBtn}
+              >
+                Cancel
+              </button>
+              <button
+                id="confirm-delete-board"
+                type="button"
+                disabled={deleting}
+                onClick={confirmDelete}
+                style={{
+                  padding: "10px 18px",
+                  borderRadius: "10px",
+                  border: "none",
+                  background: "#e53e3e",
+                  color: "#fff",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  cursor: deleting ? "not-allowed" : "pointer",
+                  opacity: deleting ? 0.7 : 1,
+                }}
+              >
+                {deleting ? "Deleting…" : "Delete Board"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         @keyframes fadeUp {
           from { opacity: 0; transform: translateY(12px); }
@@ -234,11 +320,19 @@ export const BoardDashboard: React.FC<Props> = ({ user, onSelectBoard, onLogout 
         #confirm-create-board:hover {
           background-color: var(--color-primary-active) !important;
         }
+        #confirm-delete-board:hover {
+          background: #c53030 !important;
+        }
         #logout-btn:hover { background: var(--color-surface-soft) !important; }
         [id^="board-card-"]:hover {
           border-color: var(--color-primary) !important;
           box-shadow: var(--shadow-md) !important;
           transform: translateY(-1px);
+        }
+        [id^="delete-board-btn-"]:hover {
+          background: rgba(229,62,62,0.08) !important;
+          color: #e53e3e !important;
+          border-color: rgba(229,62,62,0.3) !important;
         }
         #new-board-name:focus, #new-board-date:focus {
           outline: none;
@@ -249,6 +343,7 @@ export const BoardDashboard: React.FC<Props> = ({ user, onSelectBoard, onLogout 
     </div>
   );
 };
+
 
 const styles: Record<string, React.CSSProperties> = {
   page: {
@@ -551,4 +646,19 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     cursor: "pointer",
   },
+  deleteBtn: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "34px",
+    height: "34px",
+    borderRadius: "var(--radius-sm)",
+    border: "1px solid var(--color-hairline)",
+    background: "transparent",
+    color: "var(--color-muted)",
+    cursor: "pointer",
+    flexShrink: 0,
+    transition: "background 0.15s ease, color 0.15s ease, border-color 0.15s ease",
+  },
 };
+

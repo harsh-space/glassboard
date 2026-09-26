@@ -135,3 +135,17 @@ def get_critical_path(board_id: int, db: Session = Depends(get_db)):
 
     return {"task_ids": path, "total_duration": total_duration}
 
+
+@router.delete("/{board_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_board(board_id: int, db: Session = Depends(get_db)):
+    board = db.query(Board).filter(Board.id == board_id).first()
+    if not board:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "BOARD_NOT_FOUND", "message": f"Board {board_id} not found.", "details": {}},
+        )
+    db.delete(board)
+    db.commit()
+    return None
+
+

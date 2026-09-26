@@ -115,6 +115,11 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ name, start_date }),
     }),
+
+  deleteBoard: (boardId: number): Promise<void> =>
+    request<void>(`/auth/boards/${boardId}`, {
+      method: "DELETE",
+    }),
 };
 
 // ── Board / Task / Dependency API ─────────────────────────────────────────────

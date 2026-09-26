@@ -61,6 +61,7 @@ export const App: React.FC = () => {
   const [downstreamChanges, setDownstreamChanges] = useState<DownstreamChange[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [invariantTaskIds, setInvariantTaskIds] = useState<number[]>([]);
+  const [invariantReasons, setInvariantReasons] = useState<Record<number, string>>({});
 
   // On mount: restore session
   useEffect(() => {
@@ -182,10 +183,16 @@ export const App: React.FC = () => {
     const task = board.tasks.find((t) => t.id === taskId);
     if (!task) return;
 
+    const COLUMNS: ColumnType[] = ["backlog", "in_progress", "review", "done"];
     let targetColumn: ColumnType = task.column;
 
-    if (["backlog", "in_progress", "review", "done"].includes(String(over.id))) {
+    // Priority 1: over is a column droppable (id is column name)
+    if (COLUMNS.includes(String(over.id) as ColumnType)) {
       targetColumn = over.id as ColumnType;
+    // Priority 2: over.data.current carries a column identifier (set by useDroppable)
+    } else if (over.data.current?.column && COLUMNS.includes(over.data.current.column)) {
+      targetColumn = over.data.current.column as ColumnType;
+    // Priority 3: over is a task — use that task's column
     } else {
       const overIdStr = String(over.id).replace("task-", "");
       const overTask = board.tasks.find((t) => t.id === Number(overIdStr));
@@ -210,15 +217,33 @@ export const App: React.FC = () => {
     } catch (err: any) {
       setBoard(previousBoard);
       if (err?.code === "INVARIANT_VIOLATION") {
+        // Parse human-readable reason from violation details
+        const violations: string[] = err.details?.violations || [];
+        const reason = parseInvariantReason(violations, taskId);
         setInvariantTaskIds((prev) => [...prev.filter((id) => id !== taskId), taskId]);
+        setInvariantReasons((prev) => ({ ...prev, [taskId]: reason }));
         setTimeout(() => {
           setInvariantTaskIds((prev) => prev.filter((id) => id !== taskId));
-        }, 4000);
+          setInvariantReasons((prev) => { const n = { ...prev }; delete n[taskId]; return n; });
+        }, 5000);
+      } else if (err?.code === "TASK_BLOCKED") {
+        setErrorMessage(err.message || "Task is blocked by unfinished prerequisites.");
       } else {
         setErrorMessage(err.message || "Failed to move task");
       }
     }
   };
+
+  function parseInvariantReason(violations: string[], taskId: number): string {
+    for (const v of violations) {
+      if (v === "GRAPH_HAS_CYCLE") return "Creates a cycle in the dependency graph";
+      if (v === `SCHEDULE_VIOLATION:${taskId}`) return "Planned start before prerequisite finish";
+      if (v === `BLOCKED_TASK_ADVANCED:${taskId}`) return "Task has unfinished prerequisites";
+      if (v.startsWith("SCHEDULE_VIOLATION:")) return "Schedule conflict detected";
+      if (v.startsWith("BLOCKED_TASK_ADVANCED:")) return "Blocked task in active column";
+    }
+    return "Constraint violated";
+  }
 
   // ── Screens ─────────────────────────────────────────────────────────────────
 
@@ -462,6 +487,7 @@ export const App: React.FC = () => {
                   allTasks={board?.tasks || []}
                   criticalPathIds={criticalPathIds}
                   invariantTaskIds={invariantTaskIds}
+                  invariantReasons={invariantReasons}
                   onCardClick={(task) => setSelectedTask(task)}
                 />
               );

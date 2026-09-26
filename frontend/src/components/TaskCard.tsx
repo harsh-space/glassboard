@@ -9,6 +9,7 @@ interface TaskCardProps {
   allTasks: Task[];
   isCriticalPath?: boolean;
   hasInvariantViolation?: boolean;
+  invariantReason?: string;
   onClick: (task: Task) => void;
 }
 
@@ -17,6 +18,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   allTasks,
   isCriticalPath,
   hasInvariantViolation,
+  invariantReason,
   onClick,
 }) => {
   const {
@@ -36,14 +38,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     transition,
     opacity: isDragging ? 0.4 : 1,
     zIndex: isDragging ? 999 : 1,
-    background: hasInvariantViolation
-      ? "#fff8f0"
-      : isCriticalPath
+    background: isCriticalPath && !hasInvariantViolation
       ? "#fffdf9"
       : "var(--color-surface-card)",
-    border: hasInvariantViolation
-      ? "1.5px solid #f59e0b"
-      : isCriticalPath
+    border: isCriticalPath && !hasInvariantViolation
       ? "1.5px solid var(--color-primary)"
       : "1px solid var(--color-hairline)",
     borderRadius: "var(--radius-md)",
@@ -86,26 +84,47 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             T{task.id}
           </span>
 
-          {/* Invariant violation inline label — shown right after TX */}
+          {/* Invariant violation chips — Invariant label + reason, styled like T# chip */}
           {hasInvariantViolation && (
-            <span
-              style={{
-                fontSize: "11px",
-                fontWeight: 600,
-                color: "#92400e",
-                background: "#fef3c7",
-                border: "1px solid #f59e0b",
-                padding: "2px 6px",
-                borderRadius: "var(--radius-pill)",
-                display: "flex",
-                alignItems: "center",
-                gap: "3px",
-                animation: "pulse 0.6s ease",
-              }}
-            >
-              <AlertTriangle size={11} />
-              Invariant
-            </span>
+            <>
+              <span
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  color: "#b91c1c",
+                  background: "rgba(220,38,38,0.08)",
+                  border: "1px solid rgba(220,38,38,0.25)",
+                  padding: "2px 6px",
+                  borderRadius: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "3px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <AlertTriangle size={11} />
+                Invariant
+              </span>
+              {invariantReason && (
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 500,
+                    color: "#b91c1c",
+                    background: "rgba(220,38,38,0.06)",
+                    border: "1px solid rgba(220,38,38,0.18)",
+                    padding: "2px 7px",
+                    borderRadius: "4px",
+                    whiteSpace: "nowrap",
+                    maxWidth: "180px",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {invariantReason}
+                </span>
+              )}
+            </>
           )}
 
           {isCriticalPath && !hasInvariantViolation && (

@@ -259,3 +259,26 @@ def create_board(
     db.commit()
     db.refresh(board)
     return BoardSummary(id=board.id, name=board.name, start_date=board.start_date, task_count=0)
+
+
+@router.delete("/boards/{board_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_board(
+    board_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    board = db.query(Board).filter(Board.id == board_id).first()
+    if not board:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "BOARD_NOT_FOUND", "message": f"Board {board_id} not found.", "details": {}},
+        )
+    if board.owner_id is not None and board.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "FORBIDDEN", "message": "You do not have permission to delete this board.", "details": {}},
+        )
+    db.delete(board)
+    db.commit()
+    return None
+
