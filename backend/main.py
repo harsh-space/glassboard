@@ -18,6 +18,17 @@ from backend.routes.dependencies import router as dependencies_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    # Auto-seed canonical board if database is fresh/empty
+    try:
+        from backend.db import SessionLocal
+        from backend.models import Board
+        from scripts.seed import seed_database
+        db = SessionLocal()
+        if not db.query(Board).filter(Board.id == 1).first():
+            seed_database()
+        db.close()
+    except Exception:
+        pass
     yield
 
 app = FastAPI(title="TaskFlow Pro API", version="1.0.0", lifespan=lifespan)
