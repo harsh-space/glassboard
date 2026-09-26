@@ -4,6 +4,7 @@ from sqlalchemy import (
     Column,
     Integer,
     String,
+    Boolean,
     Text,
     Float,
     Date,
@@ -43,13 +44,28 @@ class AuditSource(str, enum.Enum):
     AI = "ai"
 
 
+class User(Base):
+    __tablename__ = "user"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    username = Column(String(100), unique=True, nullable=False, index=True)
+    hashed_password = Column(String(255), nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+
+    boards = relationship("Board", back_populates="owner", cascade="all, delete-orphan")
+
+
 class Board(Base):
     __tablename__ = "board"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
     start_date = Column(Date, nullable=False)
+    owner_id = Column(Integer, ForeignKey("user.id", ondelete="CASCADE"), nullable=True, index=True)
 
+    owner = relationship("User", back_populates="boards")
     tasks = relationship("Task", back_populates="board", cascade="all, delete-orphan")
 
 

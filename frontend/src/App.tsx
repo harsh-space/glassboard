@@ -14,21 +14,39 @@ import type {
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 
-
 import type { Board, Task, ColumnType, AISuggestion, DownstreamChange } from "./types";
-import { api, ApiRequestError } from "./api";
+import { api, authApi, type AuthUser } from "./api";
 import { KanbanColumn } from "./components/KanbanColumn";
 import { TaskCard } from "./components/TaskCard";
 import { TaskDetailModal } from "./components/TaskDetailModal";
 import { NewTaskModal } from "./components/NewTaskModal";
 import { AISuggestionsDrawer } from "./components/AISuggestionsDrawer";
 import { RippleToast } from "./components/RippleToast";
-import { Sparkles, Plus, AlertCircle, GitBranch } from "lucide-react";
+import { LoginScreen } from "./components/LoginScreen";
+import { BoardDashboard } from "./components/BoardDashboard";
+import { Sparkles, Plus, AlertCircle, GitBranch, LayoutGrid, ChevronLeft } from "lucide-react";
 
+type AppScreen = "login" | "dashboard" | "board";
+
+function getSavedUser(): AuthUser | null {
+  try {
+    const token = localStorage.getItem("auth_token");
+    const raw = localStorage.getItem("auth_user");
+    if (!token || !raw) return null;
+    const info = JSON.parse(raw);
+    return { access_token: token, token_type: "bearer", ...info };
+  } catch {
+    return null;
+  }
+}
 
 export const App: React.FC = () => {
+  const [screen, setScreen] = useState<AppScreen>("login");
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [activeBoardId, setActiveBoardId] = useState<number>(1);
+
   const [board, setBoard] = useState<Board | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
@@ -41,51 +59,83 @@ export const App: React.FC = () => {
 
   const [downstreamChanges, setDownstreamChanges] = useState<DownstreamChange[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  // Track tasks that failed an invariant check so we can show a label on the card
   const [invariantTaskIds, setInvariantTaskIds] = useState<number[]>([]);
 
-  // Setup dnd-kit sensors with activation constraint
+  // On mount: restore session
+  useEffect(() => {
+    const saved = getSavedUser();
+    if (saved) {
+      setAuthUser(saved);
+      setScreen("dashboard");
+    }
+  }, []);
+
+  const handleAuth = (user: AuthUser) => {
+    setAuthUser(user);
+    setScreen("dashboard");
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("auth_token");
+    localStorage.removeItem("auth_user");
+    setAuthUser(null);
+    setBoard(null);
+    setScreen("login");
+  };
+
+  const handleSelectBoard = (boardId: number) => {
+    setActiveBoardId(boardId);
+    setBoard(null);
+    setLoading(true);
+    setScreen("board");
+  };
+
+  const handleBackToDashboard = () => {
+    setScreen("dashboard");
+    setBoard(null);
+    setShowCriticalPath(false);
+    setCriticalPathIds([]);
+    setSuggestions([]);
+    setDownstreamChanges([]);
+    setErrorMessage(null);
+  };
+
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 5,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   const loadBoard = useCallback(async () => {
     try {
-      const data = await api.getBoard(1);
+      const data = await api.getBoard(activeBoardId);
       setBoard(data);
     } catch (err: any) {
       setErrorMessage(err.message || "Failed to load board");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeBoardId]);
 
   const loadSuggestions = useCallback(async () => {
     try {
-      const data = await api.getPendingSuggestions(1);
+      const data = await api.getPendingSuggestions(activeBoardId);
       setSuggestions(data);
     } catch {
       // Ignored if API is loading or empty
     }
-  }, []);
+  }, [activeBoardId]);
 
   useEffect(() => {
-    loadBoard();
-    loadSuggestions();
-  }, [loadBoard, loadSuggestions]);
+    if (screen === "board") {
+      loadBoard();
+      loadSuggestions();
+    }
+  }, [screen, loadBoard, loadSuggestions]);
 
-  // Toggle Critical Path
   const toggleCriticalPath = async () => {
     if (!showCriticalPath) {
       try {
-        const cp = await api.getCriticalPath(1);
+        const cp = await api.getCriticalPath(activeBoardId);
         setCriticalPathIds(cp.task_ids);
         setShowCriticalPath(true);
       } catch (err) {
@@ -100,9 +150,7 @@ export const App: React.FC = () => {
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
     const task = board?.tasks.find((t) => `task-${t.id}` === active.id);
-    if (task) {
-      setActiveTask(task);
-    }
+    if (task) setActiveTask(task);
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -118,24 +166,17 @@ export const App: React.FC = () => {
 
     let targetColumn: ColumnType = task.column;
 
-    // Check if dropped directly onto a column container
     if (["backlog", "in_progress", "review", "done"].includes(String(over.id))) {
       targetColumn = over.id as ColumnType;
     } else {
-      // Dropped onto another task card
       const overIdStr = String(over.id).replace("task-", "");
       const overTask = board.tasks.find((t) => t.id === Number(overIdStr));
-      if (overTask) {
-        targetColumn = overTask.column;
-      }
+      if (overTask) targetColumn = overTask.column;
     }
 
     if (targetColumn === task.column) return;
 
-    // Snapshot previous board state for rollback on error (optimistic update)
     const previousBoard = { ...board, tasks: [...board.tasks] };
-
-    // Apply optimistic update
     const optimisticTasks = board.tasks.map((t) =>
       t.id === taskId ? { ...t, column: targetColumn } : t
     );
@@ -143,41 +184,46 @@ export const App: React.FC = () => {
     setErrorMessage(null);
 
     try {
-      const res = await api.moveTask(task.id, {
-        column: targetColumn,
-        version: task.version,
-      });
-
-      // Reconcile with server response
+      const res = await api.moveTask(task.id, { column: targetColumn, version: task.version });
       await loadBoard();
-
       if (res.downstream_changes && res.downstream_changes.length > 0) {
         setDownstreamChanges(res.downstream_changes);
       }
     } catch (err: any) {
-      // Rollback optimistic state immediately
       setBoard(previousBoard);
-
-      if (err instanceof ApiRequestError && err.code === "INVARIANT_VIOLATION") {
-        // Show inline label on the task card instead of a global banner
+      if (err?.code === "INVARIANT_VIOLATION") {
         setInvariantTaskIds((prev) => [...prev.filter((id) => id !== taskId), taskId]);
-        // Auto-clear after 4s
         setTimeout(() => {
           setInvariantTaskIds((prev) => prev.filter((id) => id !== taskId));
         }, 4000);
-      } else if (err instanceof ApiRequestError) {
-        setErrorMessage(err.message);
       } else {
         setErrorMessage(err.message || "Failed to move task");
       }
     }
   };
 
+  // ── Screens ─────────────────────────────────────────────────────────────────
+
+  if (screen === "login") {
+    return <LoginScreen onAuth={handleAuth} />;
+  }
+
+  if (screen === "dashboard") {
+    return (
+      <BoardDashboard
+        user={authUser!}
+        onSelectBoard={handleSelectBoard}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  // Board screen
   if (loading) {
     return (
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh" }}>
         <p style={{ fontFamily: "var(--font-serif)", fontSize: "20px", color: "var(--color-muted)" }}>
-          Loading TaskFlow Pro...
+          Loading board…
         </p>
       </div>
     );
@@ -199,45 +245,70 @@ export const App: React.FC = () => {
         style={{
           background: "var(--color-surface-soft)",
           borderBottom: "1px solid var(--color-hairline)",
-          padding: "16px 32px",
+          padding: "12px 24px",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
         }}
       >
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <h1
-              style={{
-                fontFamily: "var(--font-serif)",
-                fontSize: "26px",
-                fontWeight: 600,
-                color: "var(--color-ink)",
-                letterSpacing: "-0.5px",
-              }}
-            >
-              TaskFlow Pro
-            </h1>
-            <span
-              style={{
-                fontSize: "12px",
-                color: "var(--color-primary)",
-                background: "var(--color-primary-light)",
-                padding: "2px 8px",
-                borderRadius: "var(--radius-pill)",
-                fontWeight: 600,
-              }}
-            >
-              DAG Engine
-            </span>
-          </div>
-          <div style={{ fontSize: "13px", color: "var(--color-muted)", marginTop: "2px" }}>
-            Anchor Date: {board?.start_date}
+        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          {/* Back to boards */}
+          <button
+            id="back-to-boards"
+            onClick={handleBackToDashboard}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "7px 12px",
+              borderRadius: "8px",
+              border: "1px solid var(--color-hairline)",
+              background: "var(--color-surface-card)",
+              color: "var(--color-muted)",
+              fontSize: "13px",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            <ChevronLeft size={15} />
+            Boards
+          </button>
+
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <LayoutGrid size={18} color="var(--color-primary)" />
+              <h1
+                style={{
+                  fontFamily: "var(--font-serif)",
+                  fontSize: "22px",
+                  fontWeight: 600,
+                  color: "var(--color-ink)",
+                  letterSpacing: "-0.4px",
+                }}
+              >
+                {board?.name || "TaskFlow Pro"}
+              </h1>
+              <span
+                style={{
+                  fontSize: "11px",
+                  color: "var(--color-primary)",
+                  background: "var(--color-primary-light)",
+                  padding: "2px 8px",
+                  borderRadius: "var(--radius-pill)",
+                  fontWeight: 600,
+                }}
+              >
+                DAG Engine
+              </span>
+            </div>
+            <div style={{ fontSize: "12px", color: "var(--color-muted)", marginTop: "1px" }}>
+              Anchor Date: {board?.start_date}
+            </div>
           </div>
         </div>
 
         {/* Action Controls */}
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           {/* Critical Path Toggle */}
           <button
             onClick={toggleCriticalPath}
@@ -252,6 +323,7 @@ export const App: React.FC = () => {
               display: "flex",
               alignItems: "center",
               gap: "6px",
+              cursor: "pointer",
             }}
           >
             <GitBranch size={16} />
@@ -273,6 +345,7 @@ export const App: React.FC = () => {
               alignItems: "center",
               gap: "6px",
               position: "relative",
+              cursor: "pointer",
             }}
           >
             <Sparkles size={16} color="var(--color-primary)" />
@@ -306,6 +379,8 @@ export const App: React.FC = () => {
               display: "flex",
               alignItems: "center",
               gap: "6px",
+              border: "none",
+              cursor: "pointer",
             }}
           >
             <Plus size={16} />
@@ -314,7 +389,7 @@ export const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Visible Error Banner for non-invariant drag errors (BUILD_SPEC.md §6 / §7) */}
+      {/* Error Banner */}
       {errorMessage && (
         <div
           style={{
@@ -336,7 +411,7 @@ export const App: React.FC = () => {
           </div>
           <button
             onClick={() => setErrorMessage(null)}
-            style={{ color: "var(--color-error)", fontWeight: 600, fontSize: "13px", padding: "4px 8px" }}
+            style={{ color: "var(--color-error)", fontWeight: 600, fontSize: "13px", padding: "4px 8px", background: "none", border: "none", cursor: "pointer" }}
           >
             Dismiss
           </button>
@@ -344,13 +419,7 @@ export const App: React.FC = () => {
       )}
 
       {/* Kanban Board Canvas */}
-      <main
-        style={{
-          flex: 1,
-          padding: "24px 32px",
-          overflowX: "auto",
-        }}
-      >
+      <main style={{ flex: 1, padding: "24px 32px", overflowX: "auto" }}>
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
@@ -388,7 +457,7 @@ export const App: React.FC = () => {
         </DndContext>
       </main>
 
-      {/* Task Detail Modal + Ripple Effect side panel */}
+      {/* Task Detail Modal + Ripple Effect */}
       {(selectedTask || downstreamChanges.length > 0) && (
         <div
           style={{
@@ -406,7 +475,6 @@ export const App: React.FC = () => {
           onClick={selectedTask ? () => setSelectedTask(null) : undefined}
         >
           <div style={{ display: "flex", gap: "16px", alignItems: "stretch", maxHeight: "90vh", pointerEvents: "auto" }}>
-            {/* Task Detail Modal */}
             {selectedTask && (
               <TaskDetailModal
                 task={selectedTask}
@@ -416,21 +484,15 @@ export const App: React.FC = () => {
                 onTaskUpdated={(updatedTask, changes) => {
                   setSelectedTask(updatedTask);
                   loadBoard();
-                  if (changes && changes.length > 0) {
-                    setDownstreamChanges(changes);
-                  }
+                  if (changes && changes.length > 0) setDownstreamChanges(changes);
                 }}
                 onTaskDeleted={() => {
                   setSelectedTask(null);
                   loadBoard();
                 }}
-                onDependencyChanged={() => {
-                  loadBoard();
-                }}
+                onDependencyChanged={() => loadBoard()}
               />
             )}
-
-            {/* Ripple Effect side panel — same height as modal, right next to it */}
             {downstreamChanges.length > 0 && (
               <RippleToast
                 changes={downstreamChanges}
@@ -444,12 +506,10 @@ export const App: React.FC = () => {
 
       {/* New Task Modal */}
       <NewTaskModal
-        boardId={board?.id || 1}
+        boardId={board?.id || activeBoardId}
         isOpen={isNewTaskOpen}
         onClose={() => setIsNewTaskOpen(false)}
-        onTaskCreated={() => {
-          loadBoard();
-        }}
+        onTaskCreated={() => loadBoard()}
       />
 
       {/* AI Suggestions Drawer */}
@@ -462,9 +522,7 @@ export const App: React.FC = () => {
         onSuggestionsLoaded={(list) => setSuggestions(list)}
         onSuggestionApplied={(changes) => {
           loadBoard();
-          if (changes && changes.length > 0) {
-            setDownstreamChanges(changes);
-          }
+          if (changes && changes.length > 0) setDownstreamChanges(changes);
         }}
       />
     </div>

@@ -15,12 +15,18 @@ export class ApiRequestError extends Error {
   }
 }
 
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem("auth_token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
   const response = await fetch(url, {
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...getAuthHeaders(),
       ...(options?.headers || {}),
     },
   });
@@ -47,6 +53,51 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
 
   return data as T;
 }
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+
+export interface AuthUser {
+  access_token: string;
+  token_type: string;
+  user_id: number;
+  username: string;
+  email: string;
+}
+
+export interface BoardSummary {
+  id: number;
+  name: string;
+  start_date: string;
+  task_count: number;
+}
+
+export const authApi = {
+  register: (email: string, username: string, password: string): Promise<AuthUser> =>
+    request<AuthUser>("/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ email, username, password }),
+    }),
+
+  login: (email: string, password: string): Promise<AuthUser> =>
+    request<AuthUser>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+
+  me: (): Promise<{ user_id: number; username: string; email: string }> =>
+    request("/auth/me"),
+
+  listBoards: (): Promise<BoardSummary[]> =>
+    request<BoardSummary[]>("/auth/boards"),
+
+  createBoard: (name: string, start_date: string): Promise<BoardSummary> =>
+    request<BoardSummary>("/auth/boards", {
+      method: "POST",
+      body: JSON.stringify({ name, start_date }),
+    }),
+};
+
+// ── Board / Task / Dependency API ─────────────────────────────────────────────
 
 export const api = {
   getBoard: (boardId: number = 1): Promise<Board> => {
@@ -166,4 +217,3 @@ export const api = {
     return request<{ task_ids: number[]; total_duration: number }>(`/boards/${boardId}/critical-path`);
   },
 };
-

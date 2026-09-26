@@ -14,6 +14,7 @@ from backend.db import Base, engine
 from backend.routes.boards import router as boards_router
 from backend.routes.tasks import router as tasks_router
 from backend.routes.dependencies import router as dependencies_router
+from backend.routes.auth import router as auth_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -90,6 +91,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 app.include_router(boards_router, prefix="/api")
 app.include_router(tasks_router, prefix="/api")
 app.include_router(dependencies_router, prefix="/api")
+app.include_router(auth_router, prefix="/api")
 
 
 @app.get("/")
