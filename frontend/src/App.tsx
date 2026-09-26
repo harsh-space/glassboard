@@ -25,7 +25,7 @@ import { RippleToast } from "./components/RippleToast";
 import { LoginScreen } from "./components/LoginScreen";
 import { BoardDashboard } from "./components/BoardDashboard";
 import { SetUsernameModal } from "./components/SetUsernameModal";
-import { Sparkles, Plus, AlertCircle, GitBranch, LayoutGrid, ChevronLeft } from "lucide-react";
+import { Sparkles, Plus, AlertCircle, GitBranch, ChevronLeft } from "lucide-react";
 
 type AppScreen = "login" | "dashboard" | "board";
 
@@ -329,32 +329,17 @@ export const App: React.FC = () => {
           </button>
 
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <LayoutGrid size={18} color="var(--color-primary)" />
-              <h1
-                style={{
-                  fontFamily: "var(--font-serif)",
-                  fontSize: "22px",
-                  fontWeight: 600,
-                  color: "var(--color-ink)",
-                  letterSpacing: "-0.4px",
-                }}
-              >
-                {board?.name || "TaskFlow Pro"}
-              </h1>
-              <span
-                style={{
-                  fontSize: "11px",
-                  color: "var(--color-primary)",
-                  background: "var(--color-primary-light)",
-                  padding: "2px 8px",
-                  borderRadius: "var(--radius-pill)",
-                  fontWeight: 600,
-                }}
-              >
-                DAG Engine
-              </span>
-            </div>
+            <h1
+              style={{
+                fontFamily: "var(--font-serif)",
+                fontSize: "22px",
+                fontWeight: 600,
+                color: "var(--color-ink)",
+                letterSpacing: "-0.4px",
+              }}
+            >
+              {board?.name || "TaskFlow Pro"}
+            </h1>
             <div style={{ fontSize: "12px", color: "var(--color-muted)", marginTop: "1px" }}>
               Anchor Date: {board?.start_date}
             </div>
