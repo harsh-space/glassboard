@@ -5,6 +5,12 @@
 
 ---
 
+> **Note on dates in this script:** the board's start date is set to
+> whatever day `scripts/seed.py` is run, so the exact calendar dates below
+> (e.g. `2026-10-05`) will differ if you seed the database on a different
+> day. What matters, and what will always hold, is the *relative* shift —
+> Task 7 moving by exactly 3 days, not 6 — not the specific dates shown.
+
 ## Preparation (30 seconds before demo)
 
 1. Ensure the backend and frontend are running:
@@ -114,3 +120,7 @@
 ## Summary Wrap-Up (15 seconds)
 
 > *"TaskFlow Pro delivers mathematical correctness through our isolated graph engine, non-compounding scheduling, complete explainability through the Why Panel, and responsible AI that respects human authority."*
+
+---
+
+**See also:** [`../README.md`](../README.md) for setup, [`TESTING_SCENARIOS.md`](TESTING_SCENARIOS.md) for the full manual test matrix (including auth and concurrency scenarios not in this 5-minute script), and [`ARCHITECTURE.md`](ARCHITECTURE.md) for how each of these behaviors is implemented.

@@ -1,7 +1,10 @@
 # TaskFlow Pro — Architecture Document
 
-> Written against what was actually built, per `BUILD_SPEC.md §7` and `CLAUDE.md §7`.
-> Last updated: 2026-09-25
+> Written against what was actually built, per `CLAUDE.md §7` (the mandatory
+> combined design doc) and cross-referenced against `BUILD_SPEC.md`, the
+> original implementation spec. Where the two disagree, this document wins —
+> it describes what shipped, not what was planned.
+> Last updated: 2026-09-26
 
 ---
 
@@ -17,9 +20,13 @@ dependency edges; a human must approve every link before it is committed.
 ```
 Browser (React + TypeScript)
     |
-    | HTTP/JSON (port 5173 → proxied to 8000)
+    | HTTP/JSON, Bearer JWT on private-board requests
+    | (port 5173 dev, or the deployed Vercel origin)
     |
 FastAPI Backend (port 8000)
+    |
+    |--- backend/auth.py, backend/routes/auth.py
+    |       JWT issuance, bcrypt hashing, require_board_access guard
     |
     |--- engine/ (pure Python, no DB/web imports)
     |       ├── graph.py        cycle detection, topological utilities
@@ -28,17 +35,26 @@ FastAPI Backend (port 8000)
     |       ├── invariants.py   Invariant Gate
     |       └── oracle.py       brute-force reference impl (tests only)
     |
-    |--- SQLite (taskflow.db, via SQLAlchemy)
-    |       tables: board, task, dependency, ai_suggestion, audit_log
+    |--- SQLite (local dev) / Neon PostgreSQL (deployed), via SQLAlchemy
+    |       tables: user, board, task, dependency, ai_suggestion, audit_log
     |
-    └--- backend/ai/pipeline.py    heuristic fallback + LLM stub
+    └--- backend/ai/pipeline.py    Groq (allam-2-7b) + heuristic fallback
 ```
+
+The `user` table and the JWT auth layer were not part of the original
+build spec — the synopsis and `BUILD_SPEC.md` both describe a single
+shared workspace. They were added during the build to support multi-tenant
+boards, and are layered on top of the original design rather than
+replacing it: a board with `owner_id = NULL` behaves exactly as originally
+specified, open to any caller. See §8 for the full rationale and how the
+two designs coexist.
 
 ---
 
 ## 2. Data model decisions
 
-Schema matches `BUILD_SPEC.md §2` exactly. Key decisions:
+Schema matches `BUILD_SPEC.md §2` exactly, plus one addition (§2.4 below).
+Key decisions:
 
 ### 2.1 `actual_end` semantics (escalated decision, confirmed by user)
 
@@ -71,6 +87,27 @@ Starts at 1, incremented by `PATCH /tasks/{id}` and `POST /tasks/{id}/move`
 on every successful write. Used to detect stale concurrent edits: if the
 request's `version` != the DB's current `version`, the endpoint returns
 `409 VERSION_CONFLICT` and makes no change.
+
+### 2.4 `user` table (post-spec addition)
+
+`backend/models.py` adds a sixth table beyond the five in
+`BUILD_SPEC.md §2`:
+
+| column | type | notes |
+|---|---|---|
+| id | integer, PK | |
+| email | string, unique | |
+| username | string, unique | |
+| hashed_password | string | bcrypt hash, never the plaintext password |
+| is_active | boolean | |
+| created_at | timestamp | |
+
+`board.owner_id` is a nullable foreign key to `user.id`
+(`ON DELETE CASCADE`). `owner_id IS NULL` is the canonical guest/demo
+board the original design describes; a non-null `owner_id` is a private
+board created by a registered user. No other table changed shape to
+accommodate this — `task`, `dependency`, `ai_suggestion`, and `audit_log`
+are exactly as specified. Full authorization behavior is in §8.
 
 ---
 
@@ -151,9 +188,19 @@ Error body is always:
 {"error": {"code": "SOME_CODE", "message": "human readable", "details": {}}}
 ```
 
-CORS is restricted to `http://localhost:5173` (the Vite dev server origin)
-only, not `*`. This is enforced in `backend/main.py` via FastAPI's
-`CORSMiddleware` with `allow_origins=["http://localhost:5173"]`.
+CORS is never wildcard-open by default. `backend/main.py` reads allowed
+origins from the `ALLOWED_ORIGIN` (or `FRONTEND_ORIGIN`) environment
+variable — a comma-separated list, defaulting to `http://localhost:5173`
+when unset — and passes it to FastAPI's `CORSMiddleware` as an explicit
+allow-list. On top of that explicit list, an `allow_origin_regex` permits
+any `https://*.vercel.app` origin and any `http://localhost:<port>`
+origin, so preview deployments and local dev on a non-default port both
+work without an env var change on every deploy. `allow_credentials` is
+only enabled when the configuration is not a literal `*`, so credentialed
+requests (the JWT bearer token) never travel alongside a wildcard origin.
+In the deployed configuration (`render.yaml`), `ALLOWED_ORIGIN` is
+explicitly set to the production Vercel URL, so the regex is a
+convenience for previews, not the sole guard in production.
 
 Pydantic v2 schemas validate every request body. A missing required field
 or wrong type returns a clean `400 BAD_REQUEST`, not a raw stack trace.
@@ -308,7 +355,24 @@ before running:
 
 | Variable | Purpose | Required |
 |---|---|---|
-| `DATABASE_URL` | SQLite path (default: `sqlite:///./taskflow.db`) | No |
-| `GROQ_API_KEY` | LLM key for Groq API (`allam-2-7b` model) | No — falls back to heuristic |
+| `JWT_SECRET_KEY` | Signs and verifies auth tokens | **Yes — `backend/auth.py` raises on startup if unset** |
+| `DATABASE_URL` | SQLite path locally, PostgreSQL connection string in deployment (default: `sqlite:///./taskflow.db`) | No |
+| `GROQ_API_KEY` (or `LLM_API_KEY`) | LLM key for Groq API (`allam-2-7b` model) | No — falls back to heuristic |
 | `LLM_MODEL_NAME` | Model identifier (default: `allam-2-7b`) | No |
-| `ALLOWED_ORIGIN` | Frontend origin for CORS (default: `http://localhost:5173`) | No |
+| `GROQ_BASE_URL` | Override for the Groq-compatible endpoint | No |
+| `ALLOWED_ORIGIN` (or `FRONTEND_ORIGIN`) | Comma-separated CORS allow-list; also see the `*.vercel.app`/localhost regex in §4 | No — defaults to `http://localhost:5173` |
+
+---
+
+## 11. Related documentation
+
+This document covers architecture, data model, and known limitations —
+the mandatory combined design doc per the submission checklist. For
+everything else:
+
+- **[`../README.md`](../README.md)** — setup, quick start, and the full documentation index.
+- **[`../BUILD_SPEC.md`](../BUILD_SPEC.md)** — the original implementation spec this document is written against; cited by section number throughout the codebase.
+- **[`../CLAUDE.md`](../CLAUDE.md)** — the build-order and priority document used during development.
+- **[`../AI_TOOL_DECLARATION.md`](../AI_TOOL_DECLARATION.md)** — disclosed AI tool usage during development.
+- **[`DEMO_SCRIPT.md`](DEMO_SCRIPT.md)** and **[`TESTING_SCENARIOS.md`](TESTING_SCENARIOS.md)** — walkthroughs of the behavior described here.
+- **[`synopsis/`](synopsis/)** — the original, frozen hackathon submission text.

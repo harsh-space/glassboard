@@ -39,3 +39,7 @@
 3. **Guest Bypass with Private Enforcement:** Canonical demo board (`id=1`, `owner_id=NULL`) is open for instant evaluation; user-created boards require JWT authentication.
 4. **AI Trust Guardrail:** Evidence phrases must strictly be a literal substring of the prerequisite task's text; hallucinations are dropped and logged to `audit_log`.
 5. **AI Metrics:** Heuristic pipeline achieves **100.0% precision** and **84.6% recall** against the canonical seed board (measured via `scripts/measure_ai.py`).
+
+---
+
+**See also:** [`../README.md`](../README.md) for the full documentation index, [`ARCHITECTURE.md`](ARCHITECTURE.md) for the as-built design, and [`../BUILD_SPEC.md`](../BUILD_SPEC.md) §7 for the original per-phase definition of done this log tracks against.

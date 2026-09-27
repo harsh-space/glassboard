@@ -7,6 +7,8 @@ Both local and production environments are live and ready for testing:
 - **Database:** Seeded with the canonical 10-task, 13-dependency graph.
 
 > **Access Note:** On first opening the app, you will land on the login screen. Click **"Continue as Guest / View Demo Board"** to immediately open the canonical shared workspace (Board #1) with zero login friction. (You may also register an account to create isolated personal boards).
+>
+> **Date note:** the board's start date is set when `scripts/seed.py` runs, so any specific calendar dates in the scenarios below will differ from what you see locally — check the relative day shifts (e.g. "+3 days"), not the exact dates.
 
 ---
 
@@ -179,3 +181,6 @@ python -m pytest -v
 - **8 Authorization Tests:** Public guest bypass, 401 unauthenticated, 403 cross-tenant, and owner access verification.
 - **4 AI Pipeline Tests:** Strict prerequisite substring matching, hallucinated evidence drops, and audit log recording.
 
+---
+
+**See also:** [`../README.md`](../README.md) for setup and the full documentation index, [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md) for a shorter guided walkthrough, and [`ARCHITECTURE.md`](ARCHITECTURE.md) for implementation details behind each scenario.
