@@ -1,143 +1,78 @@
-# TaskFlow Pro — Interactive UI/UX & Functionality Testing Guide
+# TaskFlow Pro — Demo Script & Testing Scenarios
 
-Both servers are live and ready for testing:
-- **Frontend App:** [http://localhost:5173](http://localhost:5173)
-- **Backend API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Database:** Freshly seeded with the canonical 10-task, 13-dependency graph.
+Both a fast guided walkthrough and the full manual test matrix live in this
+one document, so a judge can either watch the 5-minute version or work
+through every scenario in depth without switching files.
 
----
+**Environments:**
+- **Live app:** [glassboard-umber.vercel.app](https://glassboard-umber.vercel.app)
+- **Live API docs:** [glassboard-backend.onrender.com/docs](https://glassboard-backend.onrender.com/docs)
+- **Local:** [http://localhost:5173](http://localhost:5173) (API on `:8000`), seeded with the canonical 10-task, 13-dependency graph.
 
-## Scenario 1: Blocked vs. Ready Visual Enforcement & Drag-and-Drop Constraints
-
-### Objective:
-Verify that the Kanban board enforces mathematical dependency constraints visually and during drag-and-drop actions.
-
-### Steps:
-1. Open [http://localhost:5173](http://localhost:5173).
-2. Look at **Task 1 ("Requirements Gathering")**:
-   - **Expected UI:** Displays a green **Ready** badge. It has no prerequisites.
-3. Look at **Task 2 ("Database Schema Design")**:
-   - **Expected UI:** Displays an amber **Blocked** badge and a subtitle: `Needs: Requirements Gathering`.
-4. Attempt to drag **Task 2** from `Backlog` into `In Progress` or `Done`:
-   - **Expected Behavior:** The drag operation is rejected; the card snaps back to `Backlog`, and an error notification alerts: *"Cannot move blocked task: prerequisites incomplete"*.
-5. Drag **Task 1** from `Backlog` into `Done`:
-   - **Expected Behavior:** **Task 2** automatically switches its badge from **Blocked** to **Ready** in real-time. It can now be dragged to `In Progress`.
+> **Access:** the login screen has a **"Continue as Guest / View Demo Board"**
+> button that lands directly on the canonical shared board (`id=1`,
+> `owner_id=NULL`) with zero login friction. Registering an account instead
+> creates an isolated private board.
+>
+> **Dates:** the board's start date is whatever day `scripts/seed.py` was
+> run, so exact calendar dates below (e.g. `2026-10-05`) will differ from
+> what you see. What's guaranteed is the *relative* shift — Task 7 moving
+> by exactly 3 days, never 6 — not the specific date.
 
 ---
 
-## Scenario 2: Diamond Math & The Why Panel (+3 Days, Not +6)
+## Quick demo (5 minutes)
 
-### Objective:
-Verify that parallel paths leading to a milestone do not compound delays errantly (the *max-not-sum* rule) and that the Why Panel clearly explains dates and slack.
+Local setup, if not already running:
+```bash
+# Terminal 1
+python scripts/seed.py
+uvicorn backend.main:app --host 0.0.0.0 --port 8000
+# Terminal 2
+cd frontend && npm run dev
+```
 
-### Steps:
-1. Click on **Task 7 ("Integration Testing")** to open its detail modal.
-2. Inspect the **Why Panel** section:
-   - **Planned Start:** `2026-10-05`
-   - **Driving Prerequisite:** `Task 4 (Backend API Development)`
-   - **Slack:** `Task 5 (Test Data Setup)` shows **3 days of slack**.
-   - *Why?* Both Task 4 (duration 5) and Task 5 (duration 2) branch from Task 2. Task 4 finishes on Oct 05, while Task 5 finishes on Oct 02. Task 4 is the driver; Task 5 has 3 days of buffer.
-3. Close the modal. Click on **Task 2 ("Database Schema Design")**.
-4. Increase its **Duration** from `3` to `6` days (+3 days delay) and click **Save Changes**.
-5. Observe the UI:
-   - A **Ripple Toast** appears notifying that downstream tasks were rescheduled.
-6. Re-open **Task 7 ("Integration Testing")**:
-   - **Expected Date:** Planned Start moved from `2026-10-05` to `2026-10-08` (+3 days).
-   - **Mathematical Check:** The delay moved Task 7 by *exactly* 3 days, not 3 + 3 = 6 days.
-   - The Why Panel continues to show Task 4 as the driver and Task 5 with 3 days of slack.
+1. **Blocked vs. Ready (60s).** *"TaskFlow Pro treats dependencies as mathematical constraints, not just visual state."* Task 1 shows a green **Ready** chip (no prerequisites). Task 2 shows amber **Blocked** with `Needs: Requirements Gathering`. Try dragging Task 2 into In Progress — it snaps back with `"Cannot move blocked task: prerequisites incomplete"`. Drag Task 1 to Done instead — Task 2 flips to **Ready** immediately.
+2. **The Why Panel, +3 not +6 (90s).** *"Parallel paths converging on one task shouldn't compound a delay."* Open Task 7 — the Why Panel shows Task 4 as the driving prerequisite and Task 5 with 3 days of slack. Increase Task 2's duration from 3 to 6 days. A ripple toast lists every task that moved. Re-open Task 7: its start moved by exactly 3 days, not 6, and Task 4/Task 5 are still the driver/slack pair.
+3. **Cycle prevention (60s).** *"Cycles are rejected in pure Python before anything touches the database."* On Task 2, try adding Task 10 as a prerequisite. It's rejected instantly with the exact loop path, e.g. `[10 -> 2 -> 4 -> 6 -> 9 -> 10]`, and nothing is written.
+4. **The AI copilot (60s).** *"An LLM can propose a link; it can never write one."* Open the AI Suggestions drawer. Each candidate shows its reason, evidence phrase, and a challenge-pass badge. Accept one — it's created through the same endpoint a manual link would use. Reject another — it's excluded from future proposals on this board.
+5. **Regression (30s).** *"Un-completing a task should never corrupt what depended on it."* Drag Task 1 back from Done to In Progress. Task 2 immediately re-blocks, and the audit log records `needs_reverification` for anything downstream that was already Done.
+
+*"TaskFlow Pro delivers mathematical correctness through an isolated graph engine, non-compounding scheduling, complete explainability through the Why Panel, and responsible AI that respects human authority."*
 
 ---
 
-## Scenario 3: Real-Time Cycle Detection & Prevention
+## Full scenario matrix
 
-### Objective:
-Verify that cyclic dependencies are caught and rejected by forward BFS before any write occurs.
+The five scenarios above, plus four more that aren't part of the short demo: critical path highlighting, the impact-preview dry run, concurrency/refresh handling, and multi-tenant authorization.
 
-### Steps:
-1. Click on **Task 2 ("Database Schema Design")** to open its modal.
-2. In the **Dependencies** section, locate the **Add Prerequisite** dropdown.
-3. Select **Task 10 ("Release")** as a prerequisite for Task 2 and click **Add**.
-4. **Expected Behavior:**
-   - The dependency is immediately blocked.
-   - An error alert appears: `Cycle detected: [10 -> 2 -> 4 -> 6 -> 9 -> 10]`.
-   - The dependency is **not** added to the table or graph.
+### Scenario 5 — Critical Path Highlighting
+Click the **Critical Path** toggle in the header. Tasks on the longest chain by duration (e.g. Task 1 → 2 → 4 → 6 → 9 → 10) get a distinct accent border; off-path tasks (Task 3, Task 5) stay muted. Toggle again to turn it off.
 
----
+### Scenario 6 — Impact Preview (dry run)
+Open Task 4, and in its **Impact Preview** section enter a hypothetical duration of 10 days (currently 5). Clicking **Preview Impact** lists exactly which downstream tasks (6, 7, 8, 9, 10) would move and to what dates — without touching the actual board. Closing the modal without saving leaves every date unchanged.
 
-## Scenario 4: Live AI Dependency Copilot (Groq `allam-2-7b`)
+### Scenario 7 — Backward Regression (detailed)
+Move Task 1 to Done (Task 2 becomes Ready), then move Task 2 to In Progress. Drag Task 1 back to In Progress. Task 2 re-blocks immediately, and the audit log gets a `needs_reverification` entry rather than any task data being deleted or silently altered.
 
-### Objective:
-Verify the Propose → Challenge → Verify → Human Approval pipeline powered by your live Groq API key.
+### Scenario 8 — Concurrency (409) & Refresh Persistence
+Edit a task or drag a card, then hard-refresh the browser (F5) — the board reloads with the exact same state. To see the concurrency guard: open the app in two tabs, edit and save Task 1's title in Tab 1, then try saving a different edit to the same task in Tab 2 (still holding the old version). Tab 2 gets a `409 VERSION_CONFLICT` instead of silently overwriting Tab 1's change.
 
-### Steps:
-1. In the top navigation bar, click the **AI Copilot** button.
-2. The **AI Suggestions Drawer** will open on the right side.
-3. Observe the candidate suggestions returned:
-   - Notice the badge: `groq/allam-2-7b`.
-   - Each card displays the proposed link, confidence score, rationale, and extracted evidence phrase.
-   - Notice the **Survived** badge indicating it passed the skeptic challenge pass.
-4. Click **Accept** on any suggestion:
-   - The suggestion is removed from pending, and the new dependency is created on the board.
-5. Click **Reject** on another suggestion:
-   - The suggestion is dismissed and permanently excluded from future prompts on this board.
+### Scenario 9 — Board-Level Authorization & Multi-Tenant Isolation
+As a guest, `GET /api/boards/1` returns `200` with no `Authorization` header at all — the canonical board is public by design. Create a private board via `POST /api/auth/boards` with a real user token, then try `GET /api/boards/{private_board_id}`: no token returns `401`, a different user's token returns `403`, and the owner's token returns `200`.
 
 ---
 
-## Scenario 5: Critical Path Highlighting
+## Automated test suite (47 passing tests)
 
-### Objective:
-Verify that the longest path by duration can be toggled and visualized on the board.
-
-### Steps:
-1. In the header bar, click the **Critical Path** toggle switch.
-2. **Expected Behavior:**
-   - Tasks on the critical path (e.g., Task 1 → Task 2 → Task 4 → Task 6 → Task 9 → Task 10) are highlighted with a distinct primary accent border or badge.
-   - Off-critical tasks (such as Task 3 and Task 5) remain muted.
-3. Click the toggle again to turn off critical path mode.
+```bash
+python -m pytest -v
+```
+- **15 engine tests** — cycle rejection, max-not-sum propagation (the diamond case), regression rollback, Invariant Gate assertions, and a 1,000-random-graph oracle property test.
+- **20 API tests** — board retrieval, task/dependency CRUD, blocked-drag rejection, Why Panel derivation, impact preview, rate limiting, CORS headers, and uniform error formatting.
+- **8 authorization tests** — public guest bypass, `401` unauthenticated, `403` cross-tenant, `200` owner access.
+- **4 AI pipeline tests** — fabricated-evidence rejection, strict substring matching against the prerequisite's own text, audit-log recording of every drop.
 
 ---
 
-## Scenario 6: Impact Preview (Dry-Run What-If Analysis)
-
-### Objective:
-Test schedule impact forecasting without committing changes.
-
-### Steps:
-1. Click on **Task 4 ("Backend API Development")**.
-2. In the modal, locate the **Impact Preview** section.
-3. Enter a hypothetical duration of `10` days (original is 5).
-4. Click **Preview Impact**:
-   - **Expected Behavior:** A list appears showing exactly which downstream tasks would move and their projected new start dates (Tasks 6, 7, 8, 9, 10), *without* modifying the actual board.
-5. Close the modal without saving; verify no task dates were altered.
-
----
-
-## Scenario 7: Backward Regression Handling
-
-### Objective:
-Verify that regressing a completed task back to in-progress safely invalidates downstream readiness.
-
-### Steps:
-1. Drag **Task 1 ("Requirements Gathering")** to **Done**. (Task 2 becomes Ready).
-2. Move **Task 2 ("Database Schema Design")** to **In Progress**.
-3. Now drag **Task 1** backwards from **Done** to **In Progress**.
-4. **Expected Behavior:**
-   - **Task 2** immediately updates back to **Blocked**.
-   - Downstream progress is guarded, and an audit log event records `needs_reverification` without deleting or corrupting task data.
-
----
-
-## Scenario 8: Concurrency Conflict (409) & Refresh Persistence
-
-### Objective:
-Verify state persistence across page refreshes and optimistic concurrency conflict handling.
-
-### Steps:
-1. Make any modification on the board (e.g. edit a task title or drag a card).
-2. Press **F5** (hard refresh) in your browser:
-   - **Expected Behavior:** The board reloads from SQLite with the exact updated positions, dates, and column states.
-3. To test `409 VERSION_CONFLICT`:
-   - Open [http://localhost:5173](http://localhost:5173) in two browser tabs side-by-side.
-   - On Tab 1, open Task 1, edit the title to "Task 1 Updated", and save.
-   - On Tab 2 (which still holds version 1), try saving a different change to Task 1.
-   - **Expected Behavior:** Tab 2 displays a `409 Version Conflict` notification, preventing silent overwrite.
+**See also:** [`../README.md`](../README.md) for setup and the full documentation flow, and [`ARCHITECTURE.md`](ARCHITECTURE.md) for how each behavior above is implemented.

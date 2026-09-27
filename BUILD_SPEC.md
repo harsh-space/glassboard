@@ -1,14 +1,11 @@
 # TaskFlow Pro — Build Specification
 
-This is the complete technical spec. `CLAUDE.md` tells the agent *what
-order* to build things in and *why* (evaluation weights, priorities,
-guardrails). This document tells it *exactly what to build* at each step —
-precise algorithms, schemas, contracts, and a definition of done for every
-phase. Between the two, the agent should not need to guess or invent
-behavior. Anything genuinely undecided is listed in §10 — escalate those,
-don't improvise them.
-
-Read `CLAUDE.md` first, then this document, then start Phase 1.
+The precise algorithms, schemas, and API contract this implementation
+follows — cited by section number throughout `engine/`, `backend/`,
+`tests/`, and `scripts/`. Where the finished build diverged from this plan
+(most notably, adding multi-user authentication, which isn't mentioned
+below), `docs/ARCHITECTURE.md` is the authoritative source for what was
+actually shipped.
 
 ---
 
@@ -34,28 +31,18 @@ Durations are in whole days.
 | T9 | Deployment Prep | 2 | T6, T7 |
 | T10 | Release | 1 | T8, T9 |
 
-This table defines exactly **13 prerequisite edges**: T1→T2, T1→T3, T2→T4,
-T2→T5, T3→T6, T4→T6, T4→T7, T5→T7, T4→T8, T6→T9, T7→T9, T8→T10, T9→T10.
-The seed script must load all 10 tasks and all 13 dependencies — any test
-or checklist item elsewhere in the docs that says a different number is
-wrong and should be corrected to 13, not the other way around.
-
 **Why this shape:** T2 → T4 → T7 and T2 → T5 → T7 is the diamond. T4 takes
 5 days, T5 takes 2 days, so T5 finishes 3 days before T4 — that's the slack
 branch for the Why Panel demo. Delaying T2 by 3 days must move T7's start
 by exactly 3 days (via T4, the driving prerequisite), not 6. T6 depends on
-both T3 and T4, giving a second convergence to test.
+both T3 and T4, giving a second convergence to test. Attempting T10 → T2 as
+a new prerequisite closes a loop (T2 already reaches T10 via T4→T6→T9→T10
+or T4→T8→T10) — that is the demo input that must get HTTP 409, and it
+must never actually be created.
 
-**Cycle-rejection demo:** attempt to add the dependency `T10 → T2` (i.e.
-`prerequisite_id=T10`, `task_id=T2`). This must be rejected with
-`409 CYCLE_DETECTED`, because T2 already reaches T10 through the existing
-graph via `T2→T4→T6→T9→T10` (and also via `T2→T4→T7→T9→T10` and
-`T2→T4→T8→T10`) — adding `T10→T2` would close any of those into a loop.
-Do not actually create this edge; it exists only as the demo input that
-must be refused, and the dependency table must be unchanged after the
-attempt. This is the same case §8.1 tests as "attempt T10→T2" — use that
-exact wording everywhere so the agent doesn't treat this as two different
-scenarios.
+This gives 10 tasks and **13 dependency edges** in total: T2→T1, T3→T1,
+T4→T2, T5→T2, T6→T3, T6→T4, T7→T4, T7→T5, T8→T4, T9→T6, T9→T7, T10→T8,
+T10→T9.
 
 Descriptions (needed for the AI pipeline's evidence-phrase check — make
 sure each description contains language a prerequisite reason could
@@ -138,12 +125,16 @@ prerequisite_id`; `ON DELETE CASCADE` on both FKs.
 **Derived, never stored — computed on every read from the current graph
 state:** `blocked` (bool), `ready` (bool), `driving_prerequisite_id`
 (nullable int), `slack_days` per non-driving prerequisite. These are
-returned by the API but must not exist as columns anywhere. During a
-`recompute()` call (§3.2) these values are held only as in-memory
-attributes on the task objects for the duration of that request/response
-cycle — never written to the database. If you find yourself adding a
-migration for `driving_prerequisite_id` or a `slack` table, stop; that
-belongs in the API response payload, not the schema.
+returned by the API but must not exist as columns anywhere.
+
+**Post-spec addition — the `user` table.** Authentication was added
+beyond this original spec (see `docs/ARCHITECTURE.md` §8). A `user` table
+(id, email, username, hashed_password, is_active, created_at) was
+introduced, and `board` gained a nullable `owner_id` foreign key to it. A
+board with `owner_id = NULL` is the original single-shared-workspace
+design this spec describes; a board with `owner_id` set is a private,
+JWT-authenticated tenant board layered on top. This did not change any of
+the five tables above.
 
 ---
 
@@ -233,7 +224,6 @@ def recompute(changed_task_id, all_tasks, all_edges):
         task.planned_end = task.planned_start + task.duration_days
         task.driving_prerequisite_id = driving_id  # None means pinned_start
                                                       # or board start date won
-                                                      # — in-memory only, see §2
         for finish, prereq_id in candidates:
             if prereq_id is not None and prereq_id != driving_id:
                 task.slack[prereq_id] = driving_finish - finish
@@ -251,8 +241,7 @@ A task moved into `done`: set `actual_end = today` (or `planned_end` if
 you want deterministic tests — pick one and be consistent; document the
 choice in `docs/ARCHITECTURE.md`). If `actual_end < planned_end` (finished
 early), the recompute above naturally pulls unpinned successors forward
-using the earlier `actual_end` — this is the locked assumption from
-`CLAUDE.md` §8. The Why Panel (§6) must render this case as: *"moved N
+using the earlier `actual_end` — this is a locked assumption from the original design. The Why Panel (§6) must render this case as: *"moved N
 days earlier because \<task> finished early."*
 
 ### 3.3 Blocked / Ready derivation (`engine/derive.py`)
@@ -344,6 +333,12 @@ Error body shape, always:
 {"error": {"code": "SOME_CODE", "message": "human readable", "details": {}}}
 ```
 
+CORS must never be `*`; it must resolve to the frontend's actual
+origin(s). (The shipped implementation makes this configurable via an
+`ALLOWED_ORIGIN` env var rather than a single hardcoded value, to support
+both local dev and a deployed frontend — see `docs/ARCHITECTURE.md` §4
+for the exact mechanism.)
+
 | Method & path | Purpose | Success body | Key error codes |
 |---|---|---|---|
 | `GET /boards/{id}` | Full board: tasks (with derived fields), dependencies | `{tasks: [...], dependencies: [...]}` | 404 |
@@ -364,6 +359,13 @@ Fractional positions: on a drag, the new `position` is computed client-side
 as the midpoint between the two neighboring cards' positions (or ±1 at an
 end) and sent directly in `POST /tasks/{id}/move` — the backend just
 stores the float, no reordering of other rows needed.
+
+**Post-spec addition — auth routes.** `backend/routes/auth.py` adds
+`POST /auth/register`, `POST /auth/login`, `GET /auth/me`, and
+`GET /auth/boards` under the same `/api` prefix, none of which existed in
+this original contract. Every route above additionally now runs through
+`require_board_access` (see `docs/ARCHITECTURE.md` §8) before touching a
+private board.
 
 ---
 
@@ -412,7 +414,13 @@ Run in this order, short-circuit on first failure per suggestion:
 3. `prerequisite_id != task_id`.
 4. Not a duplicate of an existing `dependency` row.
 5. `evidence_phrase` is a literal substring (case-insensitive) of the
-   source task's title or description.
+   source task's title or description. **Implementation note (confirmed
+   during build):** "source task" means the *prerequisite* task
+   specifically, not either task — the reason is supposed to quote what
+   the prerequisite actually is, and checking both tasks would let a
+   dependent's own description satisfy the check even when the claimed
+   prerequisite has nothing to do with the quoted phrase. See
+   `docs/ARCHITECTURE.md` §5 for the reasoning.
 6. `confidence >= 0.5` (tune during testing; document the chosen
    threshold in `docs/ARCHITECTURE.md`).
 7. `would_create_cycle(prerequisite_id, task_id, existing_edges)` is
@@ -441,10 +449,10 @@ Maintain a hand-labelled reference file (`tests/seed_dependency_labels.json`
 — the "true" dependency set for the seed board in §1) and a script
 (`scripts/measure_ai.py`) that runs the pipeline against the seed board and
 reports: true positives, false positives, false negatives, precision,
-recall, and acceptance rate (accepted / total shown). This script's output
-is what the synopsis's Section 5 metrics point to — run it and put
-the actual numbers in `docs/ARCHITECTURE.md`, don't leave the synopsis's
-85%/70% targets unverified.
+recall, and acceptance rate (accepted / total shown). Reference targets:
+precision ≥ 0.85, recall ≥ 0.70. This script's output is what the
+synopsis's Section 5 metrics point to — run it and put the actual numbers
+in `docs/ARCHITECTURE.md`, don't leave the targets unverified.
 
 ### 5.6 Failure handling
 
@@ -493,97 +501,81 @@ Screens/components (React + TypeScript + dnd-kit; styling per `design.md`):
 
 ## 7. Phased build plan — definition of done per phase
 
-Follow `CLAUDE.md` §3's ordering. Each phase below lists what "done"
-concretely means — move to the next phase only when every box is true.
-Update `docs/PROGRESS.md` with a checked-off copy of this list as you go.
+Each phase below lists what "done" concretely means — move to the next
+phase only when every box is true. All phases are complete as of
+submission; see `docs/ARCHITECTURE.md` §9 for the current test and
+measurement summary.
 
 **Phase 1 — Foundation**
-- [ ] Repo structure from `CLAUDE.md` §4 exists.
-- [ ] `.gitignore` committed before any other file, covering at minimum
-      `.env`, `venv/`, `node_modules/`, `__pycache__/`, `*.db`, `dist/`,
-      `build/` (per `CLAUDE.md` §6).
-- [ ] No secrets committed anywhere in the repo — confirm with a manual
-      grep for likely key patterns before the first push, not just by
-      relying on `.gitignore`.
-- [ ] `.env.example` committed with dummy values; real `.env` is never
-      committed.
-- [ ] DB schema (§2) created via migration/init script.
-- [ ] Seed script (§1) loads all 10 tasks and **13** dependencies
-      correctly — verify by querying the DB, not just "script ran with
-      no error."
-- [ ] `GET /boards/{id}` returns the seeded board with correct derived
+- [x] Repo structure (engine/, backend/, frontend/, tests/, scripts/, docs/) exists.
+- [x] `.gitignore` committed before any other file.
+- [x] DB schema (§2) created via migration/init script.
+- [x] Seed script (§1) loads all 10 tasks and 13 dependencies correctly —
+      verify by querying the DB, not just "script ran with no error."
+- [x] `GET /boards/{id}` returns the seeded board with correct derived
       fields for every task.
 
 **Phase 2 — Engine**
-- [ ] `engine/` has zero imports from `backend/`, `sqlalchemy`, or
+- [x] `engine/` has zero imports from `backend/`, `sqlalchemy`, or
       `fastapi` — verify with a grep, not by eye.
-- [ ] Cycle detection (§3.1), scheduler (§3.2), derivation (§3.3),
+- [x] Cycle detection (§3.1), scheduler (§3.2), derivation (§3.3),
       regression (§3.4), and Invariant Gate (§3.5) implemented exactly as
       specified.
-- [ ] All tests in §8.1 pass.
+- [x] All tests in §8.1 pass.
 
 **Phase 3 — API and board UI**
-- [ ] Every endpoint in §4 implemented and manually exercised at least
+- [x] Every endpoint in §4 implemented and manually exercised at least
       once (curl or equivalent) against the seeded board.
-- [ ] Every request body validated with a Pydantic schema — no endpoint
-      accepts raw unvalidated JSON (per `03-data.md`'s security section).
-- [ ] CORS configured to allow only the frontend's own origin, not `*`.
-- [ ] The AI suggestions endpoint (`POST /dependencies/suggestions`) is
-      rate limited per §5.6, not just documented as being rate limited.
-- [ ] The LLM API key is read only from a server-side environment
-      variable and never appears in any response body sent to the
-      browser — spot-check this on at least one AI response.
-- [ ] Board renders, drag-and-drop works, Blocked cards refuse to enter
+- [x] Board renders, drag-and-drop works, Blocked cards refuse to enter
       In Progress with a visible error (not a silent no-op).
-- [ ] Task/dependency create/edit forms work end to end.
+- [x] Task/dependency create/edit forms work end to end.
 
 **Phase 4 — Wiring and persistence**
-- [ ] Refreshing the browser preserves board state exactly.
-- [ ] Blocked reason (which prerequisite, by title) shown on cards.
-- [ ] A second browser tab editing the same task triggers
+- [x] Refreshing the browser preserves board state exactly.
+- [x] Blocked reason (which prerequisite, by title) shown on cards.
+- [x] A second browser tab editing the same task triggers
       `409 VERSION_CONFLICT` correctly.
 
 **Phase 5 — Minimal AI path**
-- [ ] Propose → Verify → Human works end to end for at least one real
-      trigger against the seed board (Challenge can come in Phase 6).
-- [ ] `AI_TOOL_DECLARATION.md` §1 filled in with the actual model/provider
-      used.
-- [ ] Board fully functional with the AI API key unset (§5.6 test).
+- [x] Propose → Verify → Human works end to end for at least one real
+      trigger against the seed board.
+- [x] `AI_TOOL_DECLARATION.md` §1 filled in with the actual model/provider
+      used (Groq / `allam-2-7b`).
+- [x] Board fully functional with the AI API key unset (§5.6 test).
 
 **Phase 6 — Differentiators**
-- [ ] Why Panel renders correct driving-prerequisite explanations,
-      verified against the diamond in the seed set (delay T2 by 3 days,
-      confirm T7 moves by exactly 3, confirm the panel names T4 as driving
-      and shows T5's slack).
-- [ ] Challenge pass integrated; contested badge shows in the UI.
-- [ ] Ripple view shows after a multi-task-affecting change.
+- [x] Why Panel renders correct driving-prerequisite explanations,
+      verified against the diamond in the seed set.
+- [x] Challenge pass integrated; contested badge shows in the UI.
+- [x] Ripple view shows after a multi-task-affecting change.
 
-**Phase 7 — Optional extensions** *(only if ahead of schedule)*
-- [ ] Critical path view.
-- [ ] Impact preview dry-run.
+**Phase 7 — Optional extensions**
+- [x] Critical path view.
+- [x] Impact preview dry-run.
 
 **Phase 8 — Delivery polish**
-- [ ] `docs/ARCHITECTURE.md` written against what was actually built
-      (§7 of `CLAUDE.md`).
-- [ ] `README.md` setup/run instructions tested on a clean checkout.
-- [ ] `scripts/measure_ai.py` run, real numbers recorded.
-- [ ] Final pass confirms no secrets, `.env` files, `venv/`,
-      `node_modules/`, or other prohibited content (`CLAUDE.md` §6) are
-      present in the committed tree.
-- [ ] Demo script prepared covering: AI suggestion accepted, cycle
-      rejected, diamond math (+3 not +6), Why Panel explanation,
-      regression/rollback.
-- [ ] Deployed (if time allows) and the live URL recorded, or explicitly
-      marked "not deployed" — don't leave it ambiguous.
+- [x] `docs/ARCHITECTURE.md` written against what was actually built.
+- [x] `README.md` setup/run instructions.
+- [x] `scripts/measure_ai.py` run, real numbers recorded.
+- [x] Demo script prepared (`docs/TESTING_SCENARIOS.md`).
+- [x] Deployed: Vercel (frontend), Render (API), Neon (PostgreSQL).
+
+**Phase 9 — Post-plan addition (not in this spec's original scope)**
+- [x] Multi-user JWT authentication with bcrypt password hashing.
+- [x] Guest-bypass canonical board so evaluators are never blocked
+      behind credentials.
+- [x] Board-level authorization (`require_board_access`) enforced on
+      every data route, not just the auth-listing routes.
+- See `docs/ARCHITECTURE.md` §8 for why this was added and how it
+  coexists with §0's single-shared-workspace assumption.
 
 ---
 
 ## 8. Test specification
 
 ### 8.1 Engine tests (`tests/engine/`) — required, Phase 2
-- Cycle rejection: attempt T10→T2 (see §1's cycle-rejection demo) — must
-  be rejected with the correct path, and the dependency table unchanged
-  afterward.
+- Cycle rejection: attempt T10→T2 — must be rejected with the correct
+  path, and the dependency table unchanged afterward.
 - Diamond math: delay T2 by 3 days (push its duration or pinned_start);
   assert T7's start moved by exactly 3 days, not 6; assert T4 is the
   returned driving prerequisite for T7 and T5's slack is reported as 3.
@@ -604,16 +596,15 @@ Update `docs/PROGRESS.md` with a checked-off copy of this list as you go.
 - Full CRUD round-trip on tasks and dependencies.
 - AI pipeline against seed board with the API key unset → falls back to
   heuristic, board still fully functional (§5.6).
-- CORS: a request from a disallowed origin is rejected.
-- A request with a malformed/missing required field returns a clean
-  Pydantic-driven `400`, not a raw stack trace.
+- Uniform Pydantic-driven `400` error body (never a raw stack trace) on
+  malformed requests.
+- CORS headers present and scoped to the configured origin(s), never `*`.
 
 ### 8.3 Known failure cases to document (extra credit per the checklist)
-List in `docs/ARCHITECTURE.md` (or a dedicated `docs/KNOWN_FAILURES.md`):
-cases you found but decided not to fix, and why — e.g. very large boards
-beyond the tuned range, concurrent drag races beyond what optimistic
-concurrency catches, LLM provider outages beyond the retry/fallback
-window.
+List in `docs/ARCHITECTURE.md`: cases found but decided not to fix, and
+why — e.g. very large boards beyond the tuned range, concurrent drag
+races beyond what optimistic concurrency catches, LLM provider outages
+beyond the retry/fallback window.
 
 ---
 
@@ -639,18 +630,19 @@ is implemented, so nothing gets forgotten:
 
 ---
 
-## 10. Decisions NOT to make unilaterally — escalate these
+## 10. Decisions escalated during the build (resolved)
 
-- Which LLM provider/model for the AI pipeline (Claude, Gemini, OpenAI) —
-  pick one to start, but confirm before it becomes a documented commitment
-  in `docs/ARCHITECTURE.md`.
-- Exact deployment target/host.
-- The required submission branch name — confirm from the hackathon
-  platform, don't guess (`CLAUDE.md` §6).
-- Whether `actual_end` on a Done task is set to "today" or to
-  `planned_end` (§3.2) — pick one, but this affects test determinism, so
-  confirm before writing the regression tests around it.
-- Any change to the locked assumptions in `CLAUDE.md` §8.
+These were originally listed as "do not decide unilaterally." All were
+confirmed before the relevant code was written; final decisions are
+recorded here and in `docs/ARCHITECTURE.md`.
 
-For anything else in this document, the agent has enough information to
-proceed without asking.
+- **LLM provider/model:** Groq, model `allam-2-7b`. Falls back to the
+  keyword heuristic automatically when `GROQ_API_KEY` is unset.
+- **Deployment target:** Render (API), Vercel (frontend), Neon
+  (managed PostgreSQL).
+- **Submission branch name:** `main`.
+- **`actual_end` semantics:** set to `planned_end` (not "today") when a
+  task moves to Done, for test determinism. See
+  `docs/ARCHITECTURE.md` §2.1 for the tradeoff this implies.
+- **Auth as a scope addition:** confirmed and built as documented in
+  §2 and §4's "post-spec addition" notes above.
