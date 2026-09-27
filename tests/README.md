@@ -175,7 +175,7 @@ tests/engine/test_blocked.py::test_advancing_blocked_task_violates_invariants PA
 tests/engine/test_cycle.py::test_seed_graph_is_acyclic PASSED                                                [ 78%] 
 tests/engine/test_cycle.py::test_cycle_rejection_t10_to_t2 PASSED                                            [ 80%] 
 tests/engine/test_cycle.py::test_cycle_self_dependency PASSED                                                [ 81%] 
-tests/engine/test_valid_dependency_no_cycle PASSED                                            [ 83%] 
+tests/engine/test_cycle.py::test_valid_dependency_no_cycle PASSED    [ 83%]
 tests/engine/test_diamond.py::test_diamond_math_duration_delay PASSED                                        [ 85%]
 tests/engine/test_diamond.py::test_diamond_math_pinned_start_delay PASSED                                    [ 87%]
 tests/engine/test_invariants.py::test_invariants_pass_on_valid_seeded_graph PASSED                           [ 89%]

@@ -205,11 +205,11 @@ Benchmarks measured against the internal targets defined in `docs/synopsis/05-im
 
 | Benchmark | Configuration | Measured Result | 05-impact.md Target | Status |
 |---|---|---|---|---|
-| Cycle check + propagation + Invariant Gate | Synthetic DAG: 1,000 tasks, 3,000 dependencies | 109.42 ms | < 100 ms | MISS (slight overrun, ~94–117ms across runs) |
-| Board load derive | In-memory graph: 500 tasks, 1,000 dependencies | 212.15 ms | < 300 ms | MET |
-| Drag-and-drop persist | In-memory engine cost: 100 tasks, 200 dependencies | 2.22 ms/op | < 150 ms | MET |
+| Cycle check + propagation + Invariant Gate | Synthetic DAG: 1,000 tasks, 3,000 dependencies | 53.29 ms | < 100 ms | MET |
+| Board load derive | In-memory graph: 500 tasks, 1,000 dependencies | 171.09 ms | < 300 ms | MET |
+| Drag-and-drop persist | In-memory engine cost: 100 tasks, 200 dependencies | 0.98 ms/op | < 150 ms | MET |
 
-The engine propagation and Invariant Gate on 1,000 tasks and 3,000 dependencies runs in ~109 ms in pure Python (borderline around the 100 ms target depending on CPU load), while board-load derive across 500 tasks easily beats the 300 ms limit at 212 ms.
+The engine propagation and Invariant Gate on 1,000 tasks and 3,000 dependencies runs in ~53 ms in pure Python, comfortably below the 100 ms target. Board-load derive across 500 tasks runs in ~171 ms, while drag-and-drop persistence costs ~0.98 ms/op; all measured benchmarks meet their respective targets.
 
 ---
 
@@ -381,8 +381,9 @@ Board-level authorization is strictly enforced on all underlying data endpoints 
 **Status: complete.** All nine build phases — foundation, engine, API/UI,
 persistence, the AI path, the Why Panel and challenge pass, critical
 path/impact preview, delivery polish, and the post-plan authorization
-addition — are finished and covered by the 47-test suite (`pytest -v`):
-15 engine tests, 20 API tests, 8 authorization tests, 4 AI pipeline tests.
+addition — are finished and covered by the 55-test suite (`pytest -v`), spanning
+engine, API, authorization, AI pipeline, regression, ordering, and
+integration coverage.
 The AI copilot's heuristic path measures 100% precision / 84.6% recall
 against the hand-labelled seed board (`scripts/measure_ai.py`); scheduler
 and Invariant Gate latency at scale is measured by
