@@ -23,7 +23,9 @@ An AI coding assistant was used substantially throughout the build — for
 scaffolding, implementation of the algorithms specified in
 [`BUILD_SPEC.md`](BUILD_SPEC.md), test-case generation, and documentation
 drafting. Every file it touched was reviewed and is covered by the
-automated test suite (`pytest -v`, 47 passing) before being considered
+automated test suite (`pytest -v`, 55 passing as of this revision — see
+[`tests/README.md`](tests/README.md) for the exact, source-verified count
+and how to reproduce it) before being considered
 done; nothing generated-but-untested made it into the submission.
 
 Roughly, by area:
@@ -42,7 +44,9 @@ Roughly, by area:
   the Why Panel, the AI suggestions drawer, and the login/auth screens
   were built and styled with AI assistance.
 - **Tests (`tests/`)** — the full suite (engine, API, authorization, and
-  AI-pipeline tests) was scaffolded with AI assistance; all 47 tests pass.
+  AI-pipeline tests) was scaffolded with AI assistance; see
+  [`tests/README.md`](tests/README.md) for the current count and how to
+  verify it yourself rather than trusting a number in this file.
 - **Documentation** — this file, `docs/ARCHITECTURE.md`,
   `docs/TESTING_SCENARIOS.md`, and this `README.md` were drafted with AI
   assistance and then corrected against the actual codebase.

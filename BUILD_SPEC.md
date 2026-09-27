@@ -40,9 +40,10 @@ a new prerequisite closes a loop (T2 already reaches T10 via T4→T6→T9→T10
 or T4→T8→T10) — that is the demo input that must get HTTP 409, and it
 must never actually be created.
 
-This gives 10 tasks and **13 dependency edges** in total: T2→T1, T3→T1,
-T4→T2, T5→T2, T6→T3, T6→T4, T7→T4, T7→T5, T8→T4, T9→T6, T9→T7, T10→T8,
-T10→T9.
+This gives 10 tasks and **13 dependency edges** in total (written as
+`prerequisite → task`, matching the §3.1 convention below): T1→T2, T1→T3,
+T2→T4, T2→T5, T3→T6, T4→T6, T4→T7, T5→T7, T4→T8, T6→T9, T7→T9, T8→T10,
+T9→T10.
 
 Descriptions (needed for the AI pipeline's evidence-phrase check — make
 sure each description contains language a prerequisite reason could

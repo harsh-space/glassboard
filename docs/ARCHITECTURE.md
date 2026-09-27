@@ -174,6 +174,31 @@ If any violation fires, the transaction is aborted and `audit_log` gets
 `action='invariant_gate_failed'`. In correct production code this should
 never fire; if it does, it is a bug.
 
+**Deviations from BUILD_SPEC.md §3.5, explicitly called out (see also §7
+"Known limitations"):**
+- **HTTP status code is `409 CONFLICT`, not the spec's `500`.** A 500
+  implies an unexpected server fault; an invariant rejection is a detected
+  *conflict* between the attempted write and the current graph state — the
+  server behaved correctly by refusing it. 409 is the more accurate HTTP
+  semantic and is what every other rejection path in this API already uses
+  (`VERSION_CONFLICT`, `CYCLE_DETECTED`, `TASK_BLOCKED`), so `INVARIANT_VIOLATION`
+  matches that family instead of standing out as a 500.
+- **The `invariant_gate_failed` audit row is written on an independent
+  session (`backend/audit.py::log_invariant_gate_failure`), not the
+  request's own session.** A naive `db.add(AuditLog(...))` on the same
+  session that just called `db.rollback()` would be rolled back with
+  everything else, leaving no record at all — defeating the point of an
+  audit trail for exactly the failure case it exists to capture. The
+  independent-session write is deliberately best-effort: if it itself
+  fails, that failure is logged to stderr and swallowed rather than
+  turning a correct 409 into an unrelated 500.
+- **Every call site is covered by an API-level test**
+  (`tests/api/test_invariant_gate.py`), not just the engine-level
+  `check_invariants()` tests in `tests/engine/test_invariants.py`. That
+  test drives a `BLOCKED_TASK_ADVANCED` violation through the real
+  `POST /dependencies` endpoint and asserts the 409, the rollback, and the
+  audit row in one pass.
+
 ### 3.5 Performance benchmarks (measured by `scripts/measure_performance.py`)
 
 Benchmarks measured against the internal targets defined in `docs/synopsis/05-impact.md`:
@@ -251,6 +276,15 @@ endpoint). The pipeline in `backend/ai/pipeline.py` implements a two-call
 architecture (Propose + Challenge) with deterministic verification. If
 `GROQ_API_KEY` is unset or unavailable, the system automatically and
 transparently falls back to the deterministic keyword-stage heuristic.
+
+**Propose call task filtering (per `BUILD_SPEC.md §5.1`):** when a single
+target task is in scope, `run_ai_pipeline()` excludes from the prompt's task
+list any task already linked to the target by an existing dependency edge
+in either direction. The model can never place that link anyway — it would
+be rejected by the duplicate-pair check regardless of what the model
+proposes — so including it only spends prompt tokens re-proposing something
+that's already there. Whole-board runs (no single target) keep every task
+in scope, since there's no single target to exclude neighbors of.
 
 ### 5.3 Heuristic performance (measured by `scripts/measure_ai.py`)
 

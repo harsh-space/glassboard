@@ -7,6 +7,7 @@ from backend.db import get_db
 from backend.models import Board, Task, Dependency, AISuggestion, AuditLog, AuditSource
 from backend.schemas import DependencyCreate, DependencyResponse
 from backend.auth import get_current_user_optional, require_board_access
+from backend.audit import log_invariant_gate_failure
 from engine.graph import would_create_cycle
 from engine.scheduler import recompute
 from engine.invariants import check_invariants
@@ -125,6 +126,11 @@ def create_dependency(
     violations = check_invariants(all_tasks, all_edges)
     if violations:
         db.rollback()
+        log_invariant_gate_failure(
+            route="POST /dependencies",
+            violations=violations,
+            context={"task_id": payload.task_id, "prerequisite_id": payload.prerequisite_id},
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "INVARIANT_VIOLATION", "message": "Invariant check failed.", "details": {"violations": violations}},
@@ -184,6 +190,11 @@ def delete_dependency(
     violations = check_invariants(all_tasks, remaining_edges)
     if violations:
         db.rollback()
+        log_invariant_gate_failure(
+            route="DELETE /dependencies/{dep_id}",
+            violations=violations,
+            context={"dependency_id": dep_id, "task_id": task_id},
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "INVARIANT_VIOLATION", "message": "Invariant check failed after dependency removal.", "details": {"violations": violations}},

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from backend.db import get_db
 from backend.models import Board, Task, Dependency, AuditLog, TaskColumn, AuditSource
 from backend.auth import get_current_user_optional, require_board_access
+from backend.audit import log_invariant_gate_failure
 from backend.schemas import (
     TaskCreate,
     TaskUpdate,
@@ -99,6 +100,9 @@ def create_task(
     violations = check_invariants(all_tasks, all_edges)
     if violations:
         db.rollback()
+        log_invariant_gate_failure(
+            route="POST /tasks", violations=violations, context={"board_id": payload.board_id}
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "INVARIANT_VIOLATION", "message": "Invariant check failed.", "details": {"violations": violations}},
@@ -170,6 +174,9 @@ def update_task(
     violations = check_invariants(all_tasks, all_edges)
     if violations:
         db.rollback()
+        log_invariant_gate_failure(
+            route="PATCH /tasks/{task_id}", violations=violations, context={"task_id": task_id}
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "INVARIANT_VIOLATION", "message": "Invariant check failed.", "details": {"violations": violations}},
@@ -297,6 +304,9 @@ def move_task(
     violations = check_invariants(all_tasks, all_edges)
     if violations:
         db.rollback()
+        log_invariant_gate_failure(
+            route="POST /tasks/{task_id}/move", violations=violations, context={"task_id": task_id}
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "INVARIANT_VIOLATION", "message": "Invariant check failed.", "details": {"violations": violations}},
@@ -378,6 +388,9 @@ def delete_task(
     violations = check_invariants(remaining_tasks, remaining_edges)
     if violations:
         db.rollback()
+        log_invariant_gate_failure(
+            route="DELETE /tasks/{task_id}", violations=violations, context={"task_id": task_id}
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "INVARIANT_VIOLATION", "message": "Invariant check failed after task deletion.", "details": {"violations": violations}},
