@@ -18,7 +18,7 @@ export const RippleToast: React.FC<RippleToastProps> = ({
   return (
     <div
       style={{
-        marginTop: "20px",
+        marginTop: 0,
         background: "var(--color-surface-soft)",
         border: "1px solid var(--color-hairline)",
         borderLeft: "4px solid var(--color-primary)",
