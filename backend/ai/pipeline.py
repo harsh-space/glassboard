@@ -378,7 +378,7 @@ Output JSON format:
             "reason": reason,
             "evidence_phrase": evidence,
             "proposer_confidence": confidence,
-            "challenge_verdict": ch_verdict if ch_verdict in ("survived", "contested") else "survived",
+            "challenge_verdict": ch_verdict if ch_verdict in ("survived", "contested", "rejected") else "not_run",
             "status": "pending",
             "model_name": f"groq/{model_name}",
             "prompt_version": "groq-allam-v1",

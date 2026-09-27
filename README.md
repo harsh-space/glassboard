@@ -292,19 +292,31 @@ A full guided walkthrough of the running application — a 5-minute demo script 
 
 ---
 
-## Conclusion & Limitations
+## Key Assumptions & Limitations
 
-### Conclusion
+### Key Assumptions
 
-TaskFlow Pro treats "when can this start" as a question with a single correct, derivable answer rather than a field a person fills in — and treats "why did this move" as a question the system must always be able to answer. Isolating the scheduling math into a dependency-free engine made both of those guarantees independently testable, and building the AI copilot around a human-approval boundary rather than an autonomous write path let the project use an LLM for something genuinely useful (surfacing candidate dependencies from plain-text descriptions) without inheriting an LLM's failure modes in the one place — the dependency graph — where they'd be most damaging. The business case for automating this — how much manual re-editing a single upstream change saves, and the correctness and performance targets the engine is measured against — is laid out in [`docs/synopsis/05-impact.md`](docs/synopsis/05-impact.md), and every phase of the build described above, from the engine's first test through deployment, is checked off, with the current test and measurement results, in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#9-deployment-status).
+The system design and execution engine operate under the following core assumptions:
+- **Finish-to-start dependencies only:** All task dependencies are strictly finish-to-start (a dependent task cannot begin until all its direct prerequisites have reached the `done` column). Start-to-start, finish-to-finish, and lead/lag intervals are intentionally out of scope.
+- **Whole-day durations & continuous calendar:** Task durations are whole positive integers (`duration_days > 0`). Calendar days are treated continuously without modeling weekends or regional holidays.
+- **Single graph per board:** Each Kanban board represents a single dependency graph; unconstrained tasks anchor at the board's `start_date`.
+- **Database architecture:** SQLite is assumed for local development, fast seed resets, and offline testing; managed PostgreSQL (Neon) is assumed for production deployments to avoid file-lock contention under concurrent load.
+- **In-process AI rate limiting:** AI copilot proposal generation utilizes an in-memory lock per board for single-instance deployments, assuming external distributed locking (e.g. Redis) would be used for multi-process scaling.
+- **Semantic text quality:** The AI copilot assumes task titles and descriptions contain sufficient domain terminology from which verifiable evidence phrases can be directly extracted from the prerequisite's text.
 
 ### Known Limitations
 
-These are the practical edges of the system as shipped — the original risk analysis that anticipated most of them, and the mitigation chosen for each, is in [`docs/synopsis/06-risks.md`](docs/synopsis/06-risks.md):
-
-- **SQLite under concurrent load.** Local development uses SQLite, which serializes writes; more than a couple of simultaneous editors can produce write-lock timeouts distinct from the intended `409 VERSION_CONFLICT` behavior. The deployed instance uses managed PostgreSQL (Neon) instead, which doesn't share this constraint.
-- **AI rate limiting is in-process.** The one-suggestion-round-per-board limit is enforced with an in-memory lock, which is correct for a single server process but would need a distributed lock (e.g. Redis-backed) behind a multi-process deployment.
-- **Finish-to-start dependencies only**, whole-day durations, and calendar days with no weekends or holidays modeled — extending to other dependency types or a working-calendar model is a documented, deliberate scope boundary rather than an oversight.
-- **Single graph per board**, and AI suggestion quality depends on task titles and descriptions being descriptive enough to extract an evidence phrase from.
+These are the practical boundaries of the system as shipped (see [`docs/synopsis/06-risks.md`](docs/synopsis/06-risks.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#8-known-limitations--known_failures)):
+- **SQLite under concurrent load:** Local development uses SQLite, which serializes writes; simultaneous editors can produce write-lock timeouts distinct from the intended `409 VERSION_CONFLICT` behavior. The deployed instance uses managed PostgreSQL (Neon) instead, which does not share this constraint.
+- **AI rate limiting is in-process:** The one-suggestion-round-per-board limit is enforced with an in-memory lock, which is correct for a single server process but would need a distributed lock (e.g. Redis-backed) behind a multi-process deployment.
+- **Finish-to-start dependencies only:** Whole-day durations, and calendar days with no weekends or holidays modeled — extending to other dependency types or a working-calendar model is a documented, deliberate scope boundary rather than an oversight.
+- **Single graph per board:** Single graph per board is supported; AI suggestion quality depends on task titles and descriptions being descriptive enough to extract an evidence phrase from.
+- **Large-graph tuning:** Boards beyond several thousand tasks have not been benchmarked; large-scale graphs with deep cyclic verification may require batch topological checks.
 
 A full, itemized limitations list — including the reasoning behind each — is maintained in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#8-known-limitations--known_failures) as the project evolves. The exact schemas and algorithms this implementation follows are in [`BUILD_SPEC.md`](BUILD_SPEC.md), and a disclosed account of AI-assisted development is kept in [`AI_TOOL_DECLARATION.md`](AI_TOOL_DECLARATION.md).
+
+---
+
+## Conclusion
+
+TaskFlow Pro treats "when can this start" as a question with a single correct, derivable answer rather than a field a person fills in — and treats "why did this move" as a question the system must always be able to answer. Isolating the scheduling math into a dependency-free engine made both of those guarantees independently testable, and building the AI copilot around a human-approval boundary rather than an autonomous write path let the project use an LLM for something genuinely useful (surfacing candidate dependencies from plain-text descriptions) without inheriting an LLM's failure modes in the one place — the dependency graph — where they'd be most damaging. The business case for automating this — how much manual re-editing a single upstream change saves, and the correctness and performance targets the engine is measured against — is laid out in [`docs/synopsis/05-impact.md`](docs/synopsis/05-impact.md), and every phase of the build described above, from the engine's first test through deployment, is checked off, with the current test and measurement results, in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#9-deployment-status).

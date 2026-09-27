@@ -1,6 +1,6 @@
 import React from "react";
 import type { DownstreamChange, Task } from "../types";
-import { ArrowRight, Activity, X } from "lucide-react";
+import { Activity, X, ArrowRight } from "lucide-react";
 
 interface RippleToastProps {
   changes: DownstreamChange[];
@@ -17,143 +17,154 @@ export const RippleToast: React.FC<RippleToastProps> = ({
 
   return (
     <div
-      onClick={(e) => e.stopPropagation()}
       style={{
+        marginTop: "20px",
         background: "var(--color-surface-soft)",
-        color: "var(--color-ink)",
-        borderRadius: "var(--radius-lg)",
         border: "1px solid var(--color-hairline)",
-        boxShadow: "var(--shadow-lg)",
-        animation: "slideDown 0.2s ease-out",
-        width: "300px",
-        flexShrink: 0,
+        borderLeft: "4px solid var(--color-primary)",
+        borderRadius: "var(--radius-lg)",
+        padding: "14px 20px",
+        boxShadow: "var(--shadow-sm)",
         display: "flex",
-        flexDirection: "column",
-        alignSelf: "stretch",
-        maxHeight: "90vh",
-        boxSizing: "border-box",
-        overflow: "hidden",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "20px",
+        animation: "slideUp 0.2s ease-out",
       }}
     >
-      {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          padding: "18px 20px 14px",
-          borderBottom: "1px solid var(--color-hairline)",
-          flexShrink: 0,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <Activity size={16} color="var(--color-primary)" />
-          <span style={{ fontFamily: "var(--font-serif)", fontWeight: 600, fontSize: "16px", color: "var(--color-ink)" }}>
-            Ripple Effect
-          </span>
-          <span
-            style={{
-              fontSize: "11px",
-              fontWeight: 600,
-              background: "var(--color-primary-light)",
-              color: "var(--color-primary)",
-              padding: "2px 8px",
-              borderRadius: "var(--radius-pill)",
-            }}
-          >
-            {changes.length} shifted
-          </span>
-        </div>
-        <button
-          onClick={onDismiss}
+      {/* Left content */}
+      <div style={{ display: "flex", alignItems: "center", gap: "14px", flex: 1, minWidth: 0, flexWrap: "wrap" }}>
+        {/* Icon badge */}
+        <div
           style={{
-            color: "var(--color-muted)",
-            padding: "4px",
-            borderRadius: "var(--radius-sm)",
-            lineHeight: 1,
+            width: "32px",
+            height: "32px",
+            borderRadius: "var(--radius-pill)",
+            background: "var(--color-primary-light)",
+            border: "1px solid var(--color-hairline)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
           }}
         >
-          <X size={16} />
-        </button>
-      </div>
+          <Activity size={15} color="var(--color-primary)" />
+        </div>
 
-      {/* Scrollable list */}
-      <div
-        className="ripple-scroll"
-        style={{
-          flex: 1,
-          overflowY: "auto",
-          padding: "12px 16px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "8px",
-        }}
-      >
-        {changes.map((c) => {
-          const t = allTasks.find((task) => task.id === c.task_id);
-          const drivingPrereq = t?.driving_prerequisite_id
-            ? allTasks.find((item) => item.id === t.driving_prerequisite_id)
-            : null;
-
-          return (
-            <div
-              key={c.task_id}
+        <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+          {/* Title row */}
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <span
               style={{
-                background: "var(--color-canvas)",
-                border: "1px solid var(--color-hairline-soft)",
-                borderRadius: "var(--radius-md)",
-                padding: "10px 12px",
+                fontFamily: "var(--font-sans)",
+                fontSize: "11px",
+                fontWeight: 600,
+                color: "var(--color-primary)",
+                background: "var(--color-primary-light)",
+                border: "1px solid var(--color-hairline)",
+                padding: "2px 8px",
+                borderRadius: "var(--radius-pill)",
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
               }}
             >
-              <div
-                style={{
-                  fontWeight: 600,
-                  fontSize: "13px",
-                  color: "var(--color-ink)",
-                  marginBottom: "5px",
-                }}
-              >
-                T{c.task_id}: {t?.title || "Task"}
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  fontSize: "12px",
-                  color: "var(--color-muted)",
-                }}
-              >
-                <span>{c.old_start}</span>
-                <ArrowRight size={11} color="var(--color-muted)" />
-                <span
-                  style={{
-                    color: "var(--color-primary)",
-                    fontWeight: 700,
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "11px",
-                  }}
-                >
-                  {c.new_start}
-                </span>
-              </div>
-              {drivingPrereq && (
-                <div
-                  style={{
-                    fontSize: "11px",
-                    color: "var(--color-muted-soft)",
-                    marginTop: "5px",
-                    paddingTop: "5px",
-                    borderTop: "1px solid var(--color-hairline-soft)",
-                  }}
-                >
-                  Caused by: T{drivingPrereq.id} ({drivingPrereq.title})
-                </div>
-              )}
+              Ripple Effect
+            </span>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--color-ink)" }}>
+                {changes.length} downstream {changes.length === 1 ? "task" : "tasks"} rescheduled
+              </span>
             </div>
-          );
-        })}
+          </div>
+
+          {/* Shifted tasks row */}
+          <div style={{ fontSize: "13px", color: "var(--color-body)", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+              <span style={{ fontSize: "12px", color: "var(--color-muted)", fontWeight: 500 }}>
+                Shifted:
+              </span>
+              {changes.map((c) => {
+                const t = allTasks.find((task) => task.id === c.task_id);
+                return (
+                  <div
+                    key={c.task_id}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      background: "var(--color-surface-card)",
+                      border: "1px solid var(--color-hairline)",
+                      borderRadius: "var(--radius-sm)",
+                      padding: "3px 8px",
+                      fontSize: "12px",
+                      fontWeight: 500,
+                      color: "var(--color-ink)",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "10px",
+                        fontWeight: 600,
+                        color: "var(--color-muted)",
+                      }}
+                    >
+                      T{c.task_id}
+                    </span>
+                    <span>{t?.title || `Task ${c.task_id}`}</span>
+                    <ArrowRight size={10} color="var(--color-muted)" />
+                    <span
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "10px",
+                        fontWeight: 700,
+                        color: "var(--color-primary)",
+                      }}
+                    >
+                      {c.new_start}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* Dismiss button — exact copy from Movement Blocked */}
+      <button
+        onClick={onDismiss}
+        title="Dismiss"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "5px",
+          padding: "6px 12px",
+          borderRadius: "var(--radius-sm)",
+          border: "1px solid var(--color-hairline)",
+          background: "var(--color-surface-card)",
+          color: "var(--color-muted)",
+          fontSize: "12px",
+          fontWeight: 600,
+          cursor: "pointer",
+          flexShrink: 0,
+          transition: "all 0.15s ease",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.color = "var(--color-ink)";
+          e.currentTarget.style.borderColor = "var(--color-body-strong)";
+          e.currentTarget.style.background = "var(--color-surface-card-hover)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = "var(--color-muted)";
+          e.currentTarget.style.borderColor = "var(--color-hairline)";
+          e.currentTarget.style.background = "var(--color-surface-card)";
+        }}
+      >
+        <X size={14} />
+        <span>Dismiss</span>
+      </button>
     </div>
   );
 };

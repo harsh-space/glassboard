@@ -190,3 +190,38 @@ class TestEvidenceCheckDropsBadProposals:
         assert added_log.payload["prerequisite_id"] == 1
         assert added_log.payload["task_id"] == 2
         assert added_log.payload["evidence_phrase"] == "completely fabricated evidence phrase"
+
+    def test_challenge_call_failure_results_in_not_run_verdict(self):
+        """
+        Issue 3: When the Challenge call fails or times out (_call_groq_chat returns None
+        for the challenge call), the resulting suggestion's challenge_verdict must be 'not_run',
+        never defaulting to 'survived'.
+        """
+        prereq = _make_task(1, "Requirements Gathering", "Collect stakeholder requirements.")
+        dep = _make_task(2, "Backend API Development", "Build endpoints after requirements are done.")
+
+        fake_proposal = [{
+            "prerequisite_id": 1,
+            "task_id": 2,
+            "reason": "API dev needs requirements first.",
+            "evidence_phrase": "requirements",
+            "confidence": 0.9,
+        }]
+
+        with patch("backend.ai.pipeline._call_groq_chat") as mock_call:
+            # First call (propose) succeeds, second call (challenge) fails / returns None
+            mock_call.side_effect = [
+                {"suggestions": fake_proposal},
+                None,
+            ]
+            with patch.dict("os.environ", {"GROQ_API_KEY": "fake-key-for-test"}):
+                results = run_ai_pipeline(
+                    all_tasks=[prereq, dep],
+                    existing_edges=[],
+                    rejected_pairs=set(),
+                    target_task_id=None,
+                )
+
+        assert len(results) == 1
+        assert results[0]["challenge_verdict"] == "not_run"
+

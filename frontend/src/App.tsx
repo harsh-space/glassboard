@@ -93,6 +93,15 @@ export const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, [movementBanner]);
 
+  // Auto-dismiss ripple toast after 8 seconds
+  useEffect(() => {
+    if (downstreamChanges.length === 0) return;
+    const timer = setTimeout(() => {
+      setDownstreamChanges([]);
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [downstreamChanges]);
+
   // On mount: restore session
   useEffect(() => {
     const saved = getSavedUser();
@@ -245,7 +254,67 @@ export const App: React.FC = () => {
       if (overTask) targetColumn = overTask.column;
     }
 
-    if (targetColumn === task.column) return;
+    if (targetColumn === task.column) {
+      const overIdStr = String(over.id).replace("task-", "");
+      const overTaskId = Number(overIdStr);
+      if (!overTaskId || isNaN(overTaskId) || overTaskId === taskId) return;
+
+      const columnTasks = board.tasks
+        .filter((t) => t.column === task.column)
+        .sort((a, b) => a.position - b.position);
+
+      const oldIndex = columnTasks.findIndex((t) => t.id === taskId);
+      const newIndex = columnTasks.findIndex((t) => t.id === overTaskId);
+
+      if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
+
+      const reordered = [...columnTasks];
+      const [movedTask] = reordered.splice(oldIndex, 1);
+      reordered.splice(newIndex, 0, movedTask);
+
+      let newPosition: number;
+      if (newIndex === 0) {
+        const nextPos = reordered[1]?.position ?? 1.0;
+        newPosition = nextPos > 1.0 ? nextPos / 2 : nextPos - 1.0;
+      } else if (newIndex === reordered.length - 1) {
+        const prevPos = reordered[reordered.length - 2]?.position ?? 0.0;
+        newPosition = prevPos + 1.0;
+      } else {
+        const prevPos = reordered[newIndex - 1].position;
+        const nextPos = reordered[newIndex + 1].position;
+        newPosition = prevPos === nextPos ? prevPos + 0.5 : (prevPos + nextPos) / 2;
+      }
+
+      const previousBoard = { ...board, tasks: [...board.tasks] };
+      const optimisticTasks = board.tasks.map((t) =>
+        t.id === taskId ? { ...t, position: newPosition } : t
+      );
+      setBoard({ ...board, tasks: optimisticTasks });
+
+      try {
+        const res = await api.moveTask(task.id, {
+          column: task.column,
+          position: newPosition,
+          version: task.version,
+        });
+        await loadBoard();
+        if (res.downstream_changes && res.downstream_changes.length > 0) {
+          setDownstreamChanges(res.downstream_changes);
+        }
+      } catch (err: any) {
+        setBoard(previousBoard);
+        setMovementBanner({
+          taskId: task.id,
+          taskTitle: task.title,
+          sourceColumn: task.column,
+          targetColumn: formatColumnName(task.column),
+          type: "GENERAL_ERROR",
+          title: "Reorder Failed",
+          reason: err.message || "Failed to reorder task.",
+        });
+      }
+      return;
+    }
 
     const previousBoard = { ...board, tasks: [...board.tasks] };
     const optimisticTasks = board.tasks.map((t) =>
@@ -370,7 +439,7 @@ export const App: React.FC = () => {
   const pendingSuggestionsCount = suggestions.filter((s) => s.status === "pending").length;
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+    <div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {/* Top Navigation Bar */}
       <header
         style={{
@@ -506,7 +575,7 @@ export const App: React.FC = () => {
       </header>
 
       {/* Kanban Board Canvas */}
-      <main style={{ flex: 1, padding: "20px 32px 24px", overflowX: "auto", display: "flex", flexDirection: "column" }}>
+      <main style={{ flex: 1, padding: "20px 32px 24px", overflowX: "auto", overflowY: "auto", display: "flex", flexDirection: "column" }}>
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
@@ -541,6 +610,15 @@ export const App: React.FC = () => {
             ) : null}
           </DragOverlay>
         </DndContext>
+
+        {/* Space below the columns: Ripple Effect Banner */}
+        {downstreamChanges.length > 0 && (
+          <RippleToast
+            changes={downstreamChanges}
+            allTasks={board?.tasks || []}
+            onDismiss={() => setDownstreamChanges([])}
+          />
+        )}
 
         {/* Space below the columns: Dedicated Movement / Invariant Violation Banner */}
         {movementBanner && (
@@ -772,49 +850,39 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      {/* Task Detail Modal + Ripple Effect */}
-      {(selectedTask || downstreamChanges.length > 0) && (
+      {/* Task Detail Modal */}
+      {selectedTask && (
         <div
           style={{
             position: "fixed",
             inset: 0,
-            backgroundColor: selectedTask ? "rgba(20, 20, 19, 0.4)" : "transparent",
-            backdropFilter: selectedTask ? "blur(4px)" : "none",
+            backgroundColor: "rgba(20, 20, 19, 0.4)",
+            backdropFilter: "blur(4px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             zIndex: 1000,
             padding: "20px",
-            pointerEvents: selectedTask ? "auto" : "none",
           }}
-          onClick={selectedTask ? () => setSelectedTask(null) : undefined}
+          onClick={() => setSelectedTask(null)}
         >
           <div style={{ display: "flex", gap: "16px", alignItems: "stretch", maxHeight: "90vh", pointerEvents: "auto" }}>
-            {selectedTask && (
-              <TaskDetailModal
-                task={selectedTask}
-                allTasks={board?.tasks || []}
-                dependencies={board?.dependencies || []}
-                onClose={() => setSelectedTask(null)}
-                onTaskUpdated={(updatedTask, changes) => {
-                  setSelectedTask(updatedTask);
-                  loadBoard();
-                  if (changes && changes.length > 0) setDownstreamChanges(changes);
-                }}
-                onTaskDeleted={() => {
-                  setSelectedTask(null);
-                  loadBoard();
-                }}
-                onDependencyChanged={() => loadBoard()}
-              />
-            )}
-            {downstreamChanges.length > 0 && (
-              <RippleToast
-                changes={downstreamChanges}
-                allTasks={board?.tasks || []}
-                onDismiss={() => setDownstreamChanges([])}
-              />
-            )}
+            <TaskDetailModal
+              task={selectedTask}
+              allTasks={board?.tasks || []}
+              dependencies={board?.dependencies || []}
+              onClose={() => setSelectedTask(null)}
+              onTaskUpdated={(updatedTask, changes) => {
+                setSelectedTask(updatedTask);
+                loadBoard();
+                if (changes && changes.length > 0) setDownstreamChanges(changes);
+              }}
+              onTaskDeleted={() => {
+                setSelectedTask(null);
+                loadBoard();
+              }}
+              onDependencyChanged={() => loadBoard()}
+            />
           </div>
         </div>
       )}

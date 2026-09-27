@@ -61,6 +61,14 @@ Edit a task or drag a card, then hard-refresh the browser (F5) — the board rel
 ### Scenario 9 — Board-Level Authorization & Multi-Tenant Isolation
 As a guest, `GET /api/boards/1` returns `200` with no `Authorization` header at all — the canonical board is public by design. Create a private board via `POST /api/auth/boards` with a real user token, then try `GET /api/boards/{private_board_id}`: no token returns `401`, a different user's token returns `403`, and the owner's token returns `200`.
 
+### Scenario 10 — Same-Column Card Reordering & Refresh Persistence
+1. In the **Backlog** column, note the vertical order of cards (e.g., Task 1 followed by Task 2).
+2. Drag Task 2 above Task 1 within the same column and release.
+3. Observe that Task 2 is now positioned above Task 1 in the UI and the backend persists the new fractional position.
+4. Hard-refresh the page (F5 or browser reload).
+5. Confirm that Task 2 remains above Task 1, verifying that same-column reordering persists across page reloads.
+
+
 ---
 
 ## Automated test suite (47 passing tests)
