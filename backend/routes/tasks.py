@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from backend.db import get_db
 from backend.models import Board, Task, Dependency, AuditLog, TaskColumn, AuditSource
 from backend.auth import get_current_user_optional, require_board_access
+from backend.audit import log_invariant_gate_failure
 from backend.schemas import (
     TaskCreate,
     TaskUpdate,
@@ -21,6 +22,7 @@ from engine.graph import forward_closure
 from engine.scheduler import recompute
 from engine.derive import is_blocked, is_ready, handle_regression, derive_task_fields, get_blocking_prerequisites
 from engine.invariants import check_invariants
+from engine.models import EngineTask
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -72,11 +74,12 @@ def create_task(
 
     # Initial planned_start defaults to board start date or pinned_start
     initial_start = payload.pinned_start or board.start_date
+    task_col = payload.column.value if hasattr(payload.column, "value") else (payload.column or "backlog")
     task = Task(
         board_id=payload.board_id,
         title=payload.title,
         description=payload.description or "",
-        column=payload.column or "backlog",
+        column=task_col,
         position=payload.position or 1.0,
         duration_days=payload.duration_days,
         pinned_start=payload.pinned_start,
@@ -97,6 +100,9 @@ def create_task(
     violations = check_invariants(all_tasks, all_edges)
     if violations:
         db.rollback()
+        log_invariant_gate_failure(
+            route="POST /tasks", violations=violations, context={"board_id": payload.board_id}
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "INVARIANT_VIOLATION", "message": "Invariant check failed.", "details": {"violations": violations}},
@@ -168,6 +174,9 @@ def update_task(
     violations = check_invariants(all_tasks, all_edges)
     if violations:
         db.rollback()
+        log_invariant_gate_failure(
+            route="PATCH /tasks/{task_id}", violations=violations, context={"task_id": task_id}
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "INVARIANT_VIOLATION", "message": "Invariant check failed.", "details": {"violations": violations}},
@@ -228,8 +237,10 @@ def move_task(
     all_edges = db.query(Dependency).filter(Dependency.task_id.in_(task_ids)).all() if task_ids else []
 
     old_starts = {t.id: t.planned_start for t in all_tasks}
+    old_columns = {t.id: t.column for t in all_tasks}
     old_column = task.column
-    new_column = payload.column or old_column
+    new_col_val = payload.column.value if hasattr(payload.column, "value") else payload.column
+    new_column = new_col_val or old_column
 
     if payload.position is not None:
         task.position = payload.position
@@ -265,6 +276,26 @@ def move_task(
                     )
                 )
 
+            # Downstream tasks that are now blocked cannot remain in ('in_progress', 'review', 'done')
+            # per invariant rule #3 (BLOCKED_TASK_ADVANCED). Downgrade them to 'backlog'.
+            downstream_tasks = [
+                t for t in all_tasks
+                if t.id in reverification_ids or (t.id != task.id and t.column in ("in_progress", "review", "done") and is_blocked(t, all_tasks, all_edges))
+            ]
+            for d_task in downstream_tasks:
+                if d_task.column != "backlog":
+                    old_c = d_task.column
+                    d_task.column = "backlog"
+                    d_task.actual_end = None
+                    db.add(
+                        AuditLog(
+                            action="task_regressed_downstream",
+                            payload={"task_id": d_task.id, "cause_task_id": task.id, "old_column": old_c, "new_column": "backlog"},
+                            source=AuditSource.HUMAN.value,
+                        )
+                    )
+            recompute(task.id, all_tasks, all_edges, board_start_date=board.start_date)
+
         # Transitioning into done: actual_end = planned_end (per user decision)
         elif new_column == "done":
             task.actual_end = task.planned_end
@@ -273,6 +304,9 @@ def move_task(
     violations = check_invariants(all_tasks, all_edges)
     if violations:
         db.rollback()
+        log_invariant_gate_failure(
+            route="POST /tasks/{task_id}/move", violations=violations, context={"task_id": task_id}
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "INVARIANT_VIOLATION", "message": "Invariant check failed.", "details": {"violations": violations}},
@@ -281,9 +315,15 @@ def move_task(
     task.version += 1
 
     changed_tasks = [
-        {"task_id": t.id, "old_start": old_starts[t.id], "new_start": t.planned_start}
+        {
+            "task_id": t.id,
+            "old_start": old_starts[t.id],
+            "new_start": t.planned_start,
+            "old_column": old_columns[t.id],
+            "new_column": t.column,
+        }
         for t in all_tasks
-        if t.id != task.id and t.planned_start != old_starts[t.id]
+        if t.id != task.id and (t.planned_start != old_starts[t.id] or t.column != old_columns[t.id])
     ]
 
     audit = AuditLog(
@@ -348,6 +388,9 @@ def delete_task(
     violations = check_invariants(remaining_tasks, remaining_edges)
     if violations:
         db.rollback()
+        log_invariant_gate_failure(
+            route="DELETE /tasks/{task_id}", violations=violations, context={"task_id": task_id}
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "INVARIANT_VIOLATION", "message": "Invariant check failed after task deletion.", "details": {"violations": violations}},
@@ -429,7 +472,6 @@ def get_impact_preview(
     all_edges = db.query(Dependency).filter(Dependency.task_id.in_(task_ids)).all() if task_ids else []
 
     # Dry-run: deep clone task data in-memory without committing
-    from tests.engine.conftest import EngineTask
     import copy
 
     cloned_tasks = [

@@ -358,6 +358,43 @@ export const AISuggestionsDrawer: React.FC<AISuggestionsDrawerProps> = ({
                   </div>
                 )}
 
+                {sug.challenge_verdict === "not_run" && (
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      color: "var(--color-warning)",
+                      background: "var(--color-warning-bg)",
+                      border: "1px solid var(--color-warning-border)",
+                      padding: "4px 8px",
+                      borderRadius: "var(--radius-sm)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "5px",
+                    }}
+                  >
+                    <AlertTriangle size={13} />
+                    <span>Unverified — challenge check did not run</span>
+                  </div>
+                )}
+                {sug.challenge_verdict === "contested" && (
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      color: "var(--color-warning)",
+                      background: "var(--color-warning-bg)",
+                      border: "1px solid var(--color-warning-border)",
+                      padding: "4px 8px",
+                      borderRadius: "var(--radius-sm)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "5px",
+                    }}
+                  >
+                    <AlertTriangle size={13} />
+                    <span>Contested by skeptic pass</span>
+                  </div>
+                )}
+
                 {/* Actions */}
                 <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
                   <button

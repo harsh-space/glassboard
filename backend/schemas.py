@@ -1,6 +1,7 @@
 from datetime import date, datetime
 from typing import Any, Optional
 from pydantic import BaseModel, Field
+from backend.models import TaskColumn
 
 
 # --- Error Schema ---
@@ -24,7 +25,7 @@ class TaskBase(BaseModel):
 
 class TaskCreate(TaskBase):
     board_id: int
-    column: Optional[str] = "backlog"
+    column: Optional[TaskColumn] = TaskColumn.BACKLOG
     position: Optional[float] = 1.0
 
 
@@ -37,7 +38,7 @@ class TaskUpdate(BaseModel):
 
 
 class TaskMove(BaseModel):
-    column: Optional[str] = None
+    column: Optional[TaskColumn] = None
     position: Optional[float] = None
     version: int
 

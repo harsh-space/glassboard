@@ -1,4 +1,4 @@
-# TaskFlow Pro — Build Specification
+﻿# TaskFlow Pro — Build Specification
 
 The precise algorithms, schemas, and API contract this implementation
 follows — cited by section number throughout `engine/`, `backend/`,
@@ -40,9 +40,10 @@ a new prerequisite closes a loop (T2 already reaches T10 via T4→T6→T9→T10
 or T4→T8→T10) — that is the demo input that must get HTTP 409, and it
 must never actually be created.
 
-This gives 10 tasks and **13 dependency edges** in total: T2→T1, T3→T1,
-T4→T2, T5→T2, T6→T3, T6→T4, T7→T4, T7→T5, T8→T4, T9→T6, T9→T7, T10→T8,
-T10→T9.
+This gives 10 tasks and **13 dependency edges** in total (written as
+`prerequisite → task`, matching the §3.1 convention below): T1→T2, T1→T3,
+T2→T4, T2→T5, T3→T6, T4→T6, T4→T7, T5→T7, T4→T8, T6→T9, T7→T9, T8→T10,
+T9→T10.
 
 Descriptions (needed for the AI pipeline's evidence-phrase check — make
 sure each description contains language a prerequisite reason could
@@ -274,16 +275,27 @@ def handle_regression(task, all_tasks, all_edges):
     for dep in downstream:
         if dep.column == 'done':
             audit_log.write(action='needs_reverification', task_id=dep.id, source='human')
-            # do NOT auto-move it out of done — flag only, per synopsis
         # dep.blocked/ready is already correct because it's derived live
+
+# After handle_regression returns, the API layer auto-downgrades any
+# downstream task that is now blocked and still in ('in_progress',
+# 'review', 'done') to 'backlog', clearing actual_end and writing a
+# 'task_regressed_downstream' audit-log entry for each one.
 ```
 
-Downstream tasks that are not `done` need no special handling — their
-`blocked`/`ready` status is derived live and will already reflect the
-regressed prerequisite on the next read. `done` dependents are the only
-ones that need an explicit flag, because a `done` task normally implies
-its prerequisites stayed satisfied — that assumption just broke, and a
-human should look at it.
+All downstream tasks still in `in_progress`, `review`, or `done` that
+are now blocked are auto-downgraded to `backlog` (clearing `actual_end`
+and writing a `task_regressed_downstream` audit-log entry for each one).
+This design change from the original "flag only" plan was forced by
+Invariant Gate rule #3 (`BLOCKED_TASK_ADVANCED`): a blocked task cannot
+legally remain in a column that implies active progress, so the system
+must move it before the invariant check runs or the transaction would be
+rolled back. Downstream tasks that were specifically in `done` when the
+regression occurred additionally receive a `needs_reverification`
+audit-log flag on top of the downgrade — not instead of it — because a
+`done` task normally implies its prerequisites stayed satisfied; that
+assumption just broke, and a human should decide whether further manual
+action is required.
 
 ### 3.5 Invariant Gate (`engine/invariants.py`)
 

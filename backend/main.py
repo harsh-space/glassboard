@@ -109,8 +109,13 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    status_code = (
+        status.HTTP_422_UNPROCESSABLE_ENTITY
+        if (request.url.path.endswith("/move") or any("enum" in str(e.get("type", "")) for e in exc.errors()))
+        else status.HTTP_400_BAD_REQUEST
+    )
     return JSONResponse(
-        status_code=status.HTTP_400_BAD_REQUEST,
+        status_code=status_code,
         content={
             "error": {
                 "code": "VALIDATION_ERROR",

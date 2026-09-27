@@ -132,3 +132,112 @@ def test_task_impact_preview_dry_run():
     task = db.query(Task).filter(Task.id == 2).first()
     assert task.duration_days == 3
     db.close()
+
+
+def test_task_regression_downgrades_downstream_task():
+    """
+    Issue 1: When Task E (done) -> Task F (done) and E regresses to in_progress,
+    the request must succeed (no 409), E.column == 'in_progress',
+    F.column is downgraded to 'backlog', and is_blocked(F) == True.
+    """
+    from backend.models import Dependency, AuditLog
+    from engine.derive import is_blocked
+
+    db = SessionLocal()
+    # T1 -> T2 on seeded board (T1 is prerequisite of T2)
+    t1 = db.query(Task).filter(Task.id == 1).first()
+    t2 = db.query(Task).filter(Task.id == 2).first()
+    t1.column = "done"
+    t1.actual_end = t1.planned_end
+    t2.column = "done"
+    t2.actual_end = t2.planned_end
+    db.commit()
+    t1_version = t1.version
+    db.close()
+
+    # Move T1 from done to in_progress via the API
+    move_payload = {
+        "column": "in_progress",
+        "version": t1_version,
+    }
+    resp = client.post("/api/tasks/1/move", json=move_payload)
+    assert resp.status_code == 200, resp.json()
+    data = resp.json()
+    assert data["task"]["column"] == "in_progress"
+
+    # Verify downstream changes include T2
+    assert any(c["task_id"] == 2 for c in data["downstream_changes"])
+
+    # Check DB state
+    db = SessionLocal()
+    t1_db = db.query(Task).filter(Task.id == 1).first()
+    t2_db = db.query(Task).filter(Task.id == 2).first()
+    all_tasks = db.query(Task).filter(Task.board_id == 1).all()
+    all_edges = db.query(Dependency).all()
+
+    assert t1_db.column == "in_progress"
+    assert t2_db.column == "backlog"
+    assert is_blocked(t2_db, all_tasks, all_edges) is True
+
+    # Check audit log
+    logs = db.query(AuditLog).filter(AuditLog.action == "task_regressed_downstream").all()
+    assert any(log.payload.get("task_id") == 2 for log in logs)
+    db.close()
+
+
+def test_task_move_invalid_column_rejected():
+    """
+    Issue 2: POST to move task with invalid column string must return 422.
+    """
+    resp = client.post("/api/tasks/1/move", json={"column": "not_a_real_column", "version": 1})
+    assert resp.status_code == 422
+
+
+def test_task_create_invalid_column_rejected():
+    """
+    Issue 2: POST to create task with invalid column string must return 422.
+    """
+    payload = {
+        "board_id": 1,
+        "title": "Invalid Column Task",
+        "duration_days": 2,
+        "column": "invalid_column",
+    }
+    resp = client.post("/api/tasks", json=payload)
+    assert resp.status_code == 422
+
+
+def test_same_column_reorder_persists():
+    """
+    Issue 5: Moving a task within the same column to a new position updates
+    the position field and persists across board fetches.
+    """
+    board_resp = client.get("/api/boards/1")
+    assert board_resp.status_code == 200
+    t2 = next(t for t in board_resp.json()["tasks"] if t["id"] == 2)
+    t1 = next(t for t in board_resp.json()["tasks"] if t["id"] == 1)
+    assert t2["position"] > t1["position"]
+
+    # Reorder T2 above T1 by setting its position to 0.5 in the same column
+    move_payload = {
+        "column": t2["column"],
+        "position": 0.5,
+        "version": t2["version"],
+    }
+    resp = client.post("/api/tasks/2/move", json=move_payload)
+    assert resp.status_code == 200
+    assert resp.json()["task"]["position"] == 0.5
+
+    # Fetch board again (simulating page reload) and verify order
+    reload_resp = client.get("/api/boards/1")
+    assert reload_resp.status_code == 200
+    tasks = reload_resp.json()["tasks"]
+    t2_reloaded = next(t for t in tasks if t["id"] == 2)
+    t1_reloaded = next(t for t in tasks if t["id"] == 1)
+    assert t2_reloaded["position"] == 0.5
+    t2_idx = tasks.index(t2_reloaded)
+    t1_idx = tasks.index(t1_reloaded)
+    assert t2_idx < t1_idx
+
+
+

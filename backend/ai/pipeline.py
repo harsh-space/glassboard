@@ -213,10 +213,33 @@ def run_ai_pipeline(
         else:
             edge_pairs.add((getattr(edge, "prerequisite_id"), getattr(edge, "task_id")))
 
-    # Prepare closed task list for prompt
+    # Prepare closed task list for prompt.
+    # BUILD_SPEC.md §5.1: "every task on the board *except* ones already
+    # linked to the target." When a single target task is in scope, drop any
+    # task that already has a dependency edge (in either direction) with it
+    # — the model can never place that link anyway (the API's cycle/duplicate
+    # checks would reject it, and the deterministic Verify step's duplicate-
+    # pair check drops it downstream regardless), so there's no point paying
+    # prompt tokens to have it re-propose something already established.
+    # Whole-board runs (target_task_id is None) have no single target to
+    # exclude neighbors of, so every task stays in scope.
+    if target_task_id is not None:
+        already_linked_to_target = {
+            other_id
+            for (prereq_id, dep_id) in edge_pairs
+            for other_id in (
+                (dep_id,) if prereq_id == target_task_id
+                else (prereq_id,) if dep_id == target_task_id
+                else ()
+            )
+        }
+    else:
+        already_linked_to_target = set()
+
     tasks_summary = [
         {"id": t.id, "title": t.title, "description": t.description or ""}
         for t in all_tasks
+        if t.id not in already_linked_to_target
     ]
 
     target_info = f"Focus on task ID {target_task_id}." if target_task_id else "Evaluate all tasks across the board."
@@ -378,7 +401,7 @@ Output JSON format:
             "reason": reason,
             "evidence_phrase": evidence,
             "proposer_confidence": confidence,
-            "challenge_verdict": ch_verdict if ch_verdict in ("survived", "contested") else "survived",
+            "challenge_verdict": ch_verdict if ch_verdict in ("survived", "contested", "rejected") else "not_run",
             "status": "pending",
             "model_name": f"groq/{model_name}",
             "prompt_version": "groq-allam-v1",

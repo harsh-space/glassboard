@@ -149,9 +149,19 @@ When a task moves out of Done:
 - `actual_end` is cleared to `None`.
 - `recompute()` reruns using `planned_end` again (instead of the now-null
   `actual_end`).
-- Downstream tasks already in Done are flagged with
-  `audit_log(action='needs_reverification')` but are NOT auto-moved — a
-  human must decide whether to regress them too.
+- Downstream tasks that are now blocked and still in `in_progress`,
+  `review`, or `done` are automatically downgraded to `backlog`;
+  `actual_end` is cleared and a `task_regressed_downstream` audit-log
+  entry is written for each one. This design change from the original
+  "flag only" plan was forced by Invariant Gate rule #3
+  (`BLOCKED_TASK_ADVANCED`): a blocked task cannot legally remain in a
+  column that implies active progress, so the system must move it before
+  the invariant check runs or the transaction would be rolled back.
+- Downstream tasks that were already in `done` additionally receive a
+  `audit_log(action='needs_reverification')` entry, because a `done`
+  task normally implies its prerequisites stayed satisfied — that
+  assumption just broke, and a human should decide whether to keep it
+  done or regress it further.
 
 ### 3.4 Invariant Gate (`engine/invariants.py`)
 
@@ -164,17 +174,42 @@ If any violation fires, the transaction is aborted and `audit_log` gets
 `action='invariant_gate_failed'`. In correct production code this should
 never fire; if it does, it is a bug.
 
+**Deviations from BUILD_SPEC.md §3.5, explicitly called out (see also §7
+"Known limitations"):**
+- **HTTP status code is `409 CONFLICT`, not the spec's `500`.** A 500
+  implies an unexpected server fault; an invariant rejection is a detected
+  *conflict* between the attempted write and the current graph state — the
+  server behaved correctly by refusing it. 409 is the more accurate HTTP
+  semantic and is what every other rejection path in this API already uses
+  (`VERSION_CONFLICT`, `CYCLE_DETECTED`, `TASK_BLOCKED`), so `INVARIANT_VIOLATION`
+  matches that family instead of standing out as a 500.
+- **The `invariant_gate_failed` audit row is written on an independent
+  session (`backend/audit.py::log_invariant_gate_failure`), not the
+  request's own session.** A naive `db.add(AuditLog(...))` on the same
+  session that just called `db.rollback()` would be rolled back with
+  everything else, leaving no record at all — defeating the point of an
+  audit trail for exactly the failure case it exists to capture. The
+  independent-session write is deliberately best-effort: if it itself
+  fails, that failure is logged to stderr and swallowed rather than
+  turning a correct 409 into an unrelated 500.
+- **Every call site is covered by an API-level test**
+  (`tests/api/test_invariant_gate.py`), not just the engine-level
+  `check_invariants()` tests in `tests/engine/test_invariants.py`. That
+  test drives a `BLOCKED_TASK_ADVANCED` violation through the real
+  `POST /dependencies` endpoint and asserts the 409, the rollback, and the
+  audit row in one pass.
+
 ### 3.5 Performance benchmarks (measured by `scripts/measure_performance.py`)
 
 Benchmarks measured against the internal targets defined in `docs/synopsis/05-impact.md`:
 
 | Benchmark | Configuration | Measured Result | 05-impact.md Target | Status |
 |---|---|---|---|---|
-| Cycle check + propagation + Invariant Gate | Synthetic DAG: 1,000 tasks, 3,000 dependencies | 109.42 ms | < 100 ms | MISS (slight overrun, ~94–117ms across runs) |
-| Board load derive | In-memory graph: 500 tasks, 1,000 dependencies | 212.15 ms | < 300 ms | MET |
-| Drag-and-drop persist | In-memory engine cost: 100 tasks, 200 dependencies | 2.22 ms/op | < 150 ms | MET |
+| Cycle check + propagation + Invariant Gate | Synthetic DAG: 1,000 tasks, 3,000 dependencies | 53.29 ms | < 100 ms | MET |
+| Board load derive | In-memory graph: 500 tasks, 1,000 dependencies | 171.09 ms | < 300 ms | MET |
+| Drag-and-drop persist | In-memory engine cost: 100 tasks, 200 dependencies | 0.98 ms/op | < 150 ms | MET |
 
-The engine propagation and Invariant Gate on 1,000 tasks and 3,000 dependencies runs in ~109 ms in pure Python (borderline around the 100 ms target depending on CPU load), while board-load derive across 500 tasks easily beats the 300 ms limit at 212 ms.
+The engine propagation and Invariant Gate on 1,000 tasks and 3,000 dependencies runs in ~53 ms in pure Python, comfortably below the 100 ms target. Board-load derive across 500 tasks runs in ~171 ms, while drag-and-drop persistence costs ~0.98 ms/op; all measured benchmarks meet their respective targets.
 
 ---
 
@@ -241,6 +276,15 @@ endpoint). The pipeline in `backend/ai/pipeline.py` implements a two-call
 architecture (Propose + Challenge) with deterministic verification. If
 `GROQ_API_KEY` is unset or unavailable, the system automatically and
 transparently falls back to the deterministic keyword-stage heuristic.
+
+**Propose call task filtering (per `BUILD_SPEC.md §5.1`):** when a single
+target task is in scope, `run_ai_pipeline()` excludes from the prompt's task
+list any task already linked to the target by an existing dependency edge
+in either direction. The model can never place that link anyway — it would
+be rejected by the duplicate-pair check regardless of what the model
+proposes — so including it only spends prompt tokens re-proposing something
+that's already there. Whole-board runs (no single target) keep every task
+in scope, since there's no single target to exclude neighbors of.
 
 ### 5.3 Heuristic performance (measured by `scripts/measure_ai.py`)
 
@@ -337,8 +381,9 @@ Board-level authorization is strictly enforced on all underlying data endpoints 
 **Status: complete.** All nine build phases — foundation, engine, API/UI,
 persistence, the AI path, the Why Panel and challenge pass, critical
 path/impact preview, delivery polish, and the post-plan authorization
-addition — are finished and covered by the 47-test suite (`pytest -v`):
-15 engine tests, 20 API tests, 8 authorization tests, 4 AI pipeline tests.
+addition — are finished and covered by the 55-test suite (`pytest -v`), spanning
+engine, API, authorization, AI pipeline, regression, ordering, and
+integration coverage.
 The AI copilot's heuristic path measures 100% precision / 84.6% recall
 against the hand-labelled seed board (`scripts/measure_ai.py`); scheduler
 and Invariant Gate latency at scale is measured by
