@@ -575,7 +575,17 @@ export const App: React.FC = () => {
       </header>
 
       {/* Kanban Board Canvas */}
-      <main style={{ flex: 1, padding: "20px 32px 24px", overflowX: "auto", overflowY: "auto", display: "flex", flexDirection: "column" }}>
+      <main
+        style={{
+          flex: 1,
+          padding: "20px 32px 24px",
+          overflowX: "auto",
+          overflowY: "hidden",
+          display: "flex",
+          flexDirection: "column",
+          position: "relative",
+        }}
+      >
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
@@ -611,241 +621,261 @@ export const App: React.FC = () => {
           </DragOverlay>
         </DndContext>
 
-        {/* Space below the columns: Ripple Effect Banner */}
-        {downstreamChanges.length > 0 && (
-          <RippleToast
-            changes={downstreamChanges}
-            allTasks={board?.tasks || []}
-            onDismiss={() => setDownstreamChanges([])}
-          />
-        )}
-
-        {/* Space below the columns: Dedicated Movement / Invariant Violation Banner */}
-        {movementBanner && (
+        {/* Bottom notification stack. These overlays do not participate in page flow,
+            so showing a banner cannot increase the board height or create a page scrollbar. */}
+        {(downstreamChanges.length > 0 || movementBanner) && (
           <div
             style={{
-              marginTop: "20px",
-              background: "var(--color-surface-soft)",
-              border: "1px solid var(--color-hairline)",
-              borderLeft: "4px solid var(--color-error)",
-              borderRadius: "var(--radius-lg)",
-              padding: "14px 20px",
-              boxShadow: "var(--shadow-sm)",
+              position: "absolute",
+              left: "32px",
+              right: "32px",
+              bottom: "24px",
+              zIndex: 20,
               display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "20px",
-              animation: "slideUp 0.2s ease-out",
+              flexDirection: "column",
+              gap: "12px",
+              pointerEvents: "none",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "14px", flex: 1, minWidth: 0, flexWrap: "wrap" }}>
-              <div
-                style={{
-                  width: "32px",
-                  height: "32px",
-                  borderRadius: "var(--radius-pill)",
-                  background: "var(--color-error-bg)",
-                  border: "1px solid var(--color-error-border)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                }}
-              >
-                <Lock size={15} color="var(--color-error)" />
+            {downstreamChanges.length > 0 && (
+              <div style={{ pointerEvents: "auto" }}>
+                <RippleToast
+                  changes={downstreamChanges}
+                  allTasks={board?.tasks || []}
+                  onDismiss={() => setDownstreamChanges([])}
+                />
               </div>
+            )}
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                  <span
+            {movementBanner && (
+              <div style={{ pointerEvents: "auto" }}>
+                <div
+                  style={{
+                    marginTop: 0,
+                    background: "var(--color-surface-soft)",
+                    border: "1px solid var(--color-hairline)",
+                    borderLeft: "4px solid var(--color-error)",
+                    borderRadius: "var(--radius-lg)",
+                    padding: "14px 20px",
+                    boxShadow: "var(--shadow-sm)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "20px",
+                    animation: "slideUp 0.2s ease-out",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "14px", flex: 1, minWidth: 0, flexWrap: "wrap" }}>
+                    <div
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "var(--radius-pill)",
+                        background: "var(--color-error-bg)",
+                        border: "1px solid var(--color-error-border)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Lock size={15} color="var(--color-error)" />
+                    </div>
+
+                    <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                        <span
+                          style={{
+                            fontFamily: "var(--font-sans)",
+                            fontSize: "11px",
+                            fontWeight: 600,
+                            color: "var(--color-error)",
+                            background: "var(--color-error-bg)",
+                            border: "1px solid var(--color-error-border)",
+                            padding: "2px 8px",
+                            borderRadius: "var(--radius-pill)",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.5px",
+                          }}
+                        >
+                          {movementBanner.title}
+                        </span>
+
+                        {movementBanner.taskId && (
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <span
+                              style={{
+                                fontFamily: "var(--font-mono)",
+                                fontSize: "11px",
+                                fontWeight: 600,
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                background: "rgba(0,0,0,0.05)",
+                                color: "var(--color-muted)",
+                              }}
+                            >
+                              T{movementBanner.taskId}
+                            </span>
+                            <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--color-ink)" }}>
+                              {movementBanner.taskTitle}
+                            </span>
+                            {movementBanner.targetColumn && (
+                              <span style={{ fontSize: "13px", color: "var(--color-muted)" }}>
+                                →{" "}
+                                <strong style={{ color: "var(--color-ink)", fontWeight: 600 }}>
+                                  {movementBanner.targetColumn}
+                                </strong>
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ fontSize: "13px", color: "var(--color-body)", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                        <span>{movementBanner.reason}</span>
+
+                        {movementBanner.blockingTasks && movementBanner.blockingTasks.length > 0 && (
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                            <span style={{ fontSize: "12px", color: "var(--color-muted)", fontWeight: 500 }}>
+                              Unfinished:
+                            </span>
+                            {movementBanner.blockingTasks.map((pt) => (
+                              <button
+                                key={pt.id}
+                                onClick={() => {
+                                  const found = board?.tasks.find((t) => t.id === pt.id);
+                                  if (found) setSelectedTask(found);
+                                }}
+                                title="Click to view task details"
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "5px",
+                                  background: "var(--color-surface-card)",
+                                  border: "1px solid var(--color-hairline)",
+                                  borderRadius: "var(--radius-sm)",
+                                  padding: "3px 8px",
+                                  fontSize: "12px",
+                                  fontWeight: 500,
+                                  color: "var(--color-ink)",
+                                  cursor: "pointer",
+                                  transition: "all 0.15s ease",
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.borderColor = "var(--color-primary)";
+                                  e.currentTarget.style.background = "var(--color-surface-card-hover)";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.borderColor = "var(--color-hairline)";
+                                  e.currentTarget.style.background = "var(--color-surface-card)";
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontFamily: "var(--font-mono)",
+                                    fontSize: "10px",
+                                    fontWeight: 600,
+                                    color: "var(--color-muted)",
+                                  }}
+                                >
+                                  T{pt.id}
+                                </span>
+                                <span>{pt.title}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {movementBanner.affectedTasks && movementBanner.affectedTasks.length > 0 && (
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                            <span style={{ fontSize: "12px", color: "var(--color-muted)", fontWeight: 500 }}>
+                              Affects:
+                            </span>
+                            {movementBanner.affectedTasks.map((at) => (
+                              <button
+                                key={at.id}
+                                onClick={() => {
+                                  const found = board?.tasks.find((t) => t.id === at.id);
+                                  if (found) setSelectedTask(found);
+                                }}
+                                title="Click to view task details"
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "5px",
+                                  background: "var(--color-surface-card)",
+                                  border: "1px solid var(--color-hairline)",
+                                  borderRadius: "var(--radius-sm)",
+                                  padding: "3px 8px",
+                                  fontSize: "12px",
+                                  fontWeight: 500,
+                                  color: "var(--color-ink)",
+                                  cursor: "pointer",
+                                  transition: "all 0.15s ease",
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.borderColor = "var(--color-primary)";
+                                  e.currentTarget.style.background = "var(--color-surface-card-hover)";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.borderColor = "var(--color-hairline)";
+                                  e.currentTarget.style.background = "var(--color-surface-card)";
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontFamily: "var(--font-mono)",
+                                    fontSize: "10px",
+                                    fontWeight: 600,
+                                    color: "var(--color-muted)",
+                                  }}
+                                >
+                                  T{at.id}
+                                </span>
+                                <span>{at.title}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setMovementBanner(null)}
+                    title="Dismiss"
                     style={{
-                      fontFamily: "var(--font-sans)",
-                      fontSize: "11px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      padding: "6px 12px",
+                      borderRadius: "var(--radius-sm)",
+                      border: "1px solid var(--color-hairline)",
+                      background: "var(--color-surface-card)",
+                      color: "var(--color-muted)",
+                      fontSize: "12px",
                       fontWeight: 600,
-                      color: "var(--color-error)",
-                      background: "var(--color-error-bg)",
-                      border: "1px solid var(--color-error-border)",
-                      padding: "2px 8px",
-                      borderRadius: "var(--radius-pill)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px",
+                      cursor: "pointer",
+                      flexShrink: 0,
+                      transition: "all 0.15s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = "var(--color-ink)";
+                      e.currentTarget.style.borderColor = "var(--color-body-strong)";
+                      e.currentTarget.style.background = "var(--color-surface-card-hover)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = "var(--color-muted)";
+                      e.currentTarget.style.borderColor = "var(--color-hairline)";
+                      e.currentTarget.style.background = "var(--color-surface-card)";
                     }}
                   >
-                    {movementBanner.title}
-                  </span>
-
-                  {movementBanner.taskId && (
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                      <span
-                        style={{
-                          fontFamily: "var(--font-mono)",
-                          fontSize: "11px",
-                          fontWeight: 600,
-                          padding: "2px 6px",
-                          borderRadius: "4px",
-                          background: "rgba(0,0,0,0.05)",
-                          color: "var(--color-muted)",
-                        }}
-                      >
-                        T{movementBanner.taskId}
-                      </span>
-                      <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--color-ink)" }}>
-                        {movementBanner.taskTitle}
-                      </span>
-                      {movementBanner.targetColumn && (
-                        <span style={{ fontSize: "13px", color: "var(--color-muted)" }}>
-                          →{" "}
-                          <strong style={{ color: "var(--color-ink)", fontWeight: 600 }}>
-                            {movementBanner.targetColumn}
-                          </strong>
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div style={{ fontSize: "13px", color: "var(--color-body)", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                  <span>{movementBanner.reason}</span>
-
-                  {movementBanner.blockingTasks && movementBanner.blockingTasks.length > 0 && (
-                    <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                      <span style={{ fontSize: "12px", color: "var(--color-muted)", fontWeight: 500 }}>
-                        Unfinished:
-                      </span>
-                      {movementBanner.blockingTasks.map((pt) => (
-                        <button
-                          key={pt.id}
-                          onClick={() => {
-                            const found = board?.tasks.find((t) => t.id === pt.id);
-                            if (found) setSelectedTask(found);
-                          }}
-                          title="Click to view task details"
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "5px",
-                            background: "var(--color-surface-card)",
-                            border: "1px solid var(--color-hairline)",
-                            borderRadius: "var(--radius-sm)",
-                            padding: "3px 8px",
-                            fontSize: "12px",
-                            fontWeight: 500,
-                            color: "var(--color-ink)",
-                            cursor: "pointer",
-                            transition: "all 0.15s ease",
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = "var(--color-primary)";
-                            e.currentTarget.style.background = "var(--color-surface-card-hover)";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = "var(--color-hairline)";
-                            e.currentTarget.style.background = "var(--color-surface-card)";
-                          }}
-                        >
-                          <span
-                            style={{
-                              fontFamily: "var(--font-mono)",
-                              fontSize: "10px",
-                              fontWeight: 600,
-                              color: "var(--color-muted)",
-                            }}
-                          >
-                            T{pt.id}
-                          </span>
-                          <span>{pt.title}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {movementBanner.affectedTasks && movementBanner.affectedTasks.length > 0 && (
-                    <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                      <span style={{ fontSize: "12px", color: "var(--color-muted)", fontWeight: 500 }}>
-                        Affects:
-                      </span>
-                      {movementBanner.affectedTasks.map((at) => (
-                        <button
-                          key={at.id}
-                          onClick={() => {
-                            const found = board?.tasks.find((t) => t.id === at.id);
-                            if (found) setSelectedTask(found);
-                          }}
-                          title="Click to view task details"
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "5px",
-                            background: "var(--color-surface-card)",
-                            border: "1px solid var(--color-hairline)",
-                            borderRadius: "var(--radius-sm)",
-                            padding: "3px 8px",
-                            fontSize: "12px",
-                            fontWeight: 500,
-                            color: "var(--color-ink)",
-                            cursor: "pointer",
-                            transition: "all 0.15s ease",
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = "var(--color-primary)";
-                            e.currentTarget.style.background = "var(--color-surface-card-hover)";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = "var(--color-hairline)";
-                            e.currentTarget.style.background = "var(--color-surface-card)";
-                          }}
-                        >
-                          <span
-                            style={{
-                              fontFamily: "var(--font-mono)",
-                              fontSize: "10px",
-                              fontWeight: 600,
-                              color: "var(--color-muted)",
-                            }}
-                          >
-                            T{at.id}
-                          </span>
-                          <span>{at.title}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                    <X size={14} />
+                    <span>Dismiss</span>
+                  </button>
                 </div>
               </div>
-            </div>
-
-            <button
-              onClick={() => setMovementBanner(null)}
-              title="Dismiss"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                padding: "6px 12px",
-                borderRadius: "var(--radius-sm)",
-                border: "1px solid var(--color-hairline)",
-                background: "var(--color-surface-card)",
-                color: "var(--color-muted)",
-                fontSize: "12px",
-                fontWeight: 600,
-                cursor: "pointer",
-                flexShrink: 0,
-                transition: "all 0.15s ease",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = "var(--color-ink)";
-                e.currentTarget.style.borderColor = "var(--color-body-strong)";
-                e.currentTarget.style.background = "var(--color-surface-card-hover)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = "var(--color-muted)";
-                e.currentTarget.style.borderColor = "var(--color-hairline)";
-                e.currentTarget.style.background = "var(--color-surface-card)";
-              }}
-            >
-              <X size={14} />
-              <span>Dismiss</span>
-            </button>
+            )}
           </div>
         )}
       </main>
