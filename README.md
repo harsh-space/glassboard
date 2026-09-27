@@ -229,6 +229,7 @@ The interactive Swagger docs for the live deployment are at [glassboard-backend.
 ### 2. Clone & Backend Setup
 
 ```bash
+# The repository is named glassboard from an earlier working name; the product is TaskFlow Pro
 git clone https://github.com/harsh-space/glassboard.git
 cd glassboard
 
