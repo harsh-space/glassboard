@@ -71,16 +71,11 @@ As a guest, `GET /api/boards/1` returns `200` with no `Authorization` header at 
 
 ---
 
-## Automated test suite (47 passing tests)
+## Automated test suite (55 passing tests)
 
 ```bash
 python -m pytest -v
 ```
-- **15 engine tests** — cycle rejection, max-not-sum propagation (the diamond case), regression rollback, Invariant Gate assertions, and a 1,000-random-graph oracle property test.
-- **20 API tests** — board retrieval, task/dependency CRUD, blocked-drag rejection, Why Panel derivation, impact preview, rate limiting, CORS headers, and uniform error formatting.
-- **8 authorization tests** — public guest bypass, `401` unauthenticated, `403` cross-tenant, `200` owner access.
-- **4 AI pipeline tests** — fabricated-evidence rejection, strict substring matching against the prerequisite's own text, audit-log recording of every drop.
-
 ---
 
 **See also:** [`../README.md`](../README.md) for setup and the full documentation flow, and [`ARCHITECTURE.md`](ARCHITECTURE.md) for how each behavior above is implemented.
