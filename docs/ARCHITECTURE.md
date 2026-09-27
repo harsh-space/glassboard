@@ -149,9 +149,19 @@ When a task moves out of Done:
 - `actual_end` is cleared to `None`.
 - `recompute()` reruns using `planned_end` again (instead of the now-null
   `actual_end`).
-- Downstream tasks already in Done are flagged with
-  `audit_log(action='needs_reverification')` but are NOT auto-moved — a
-  human must decide whether to regress them too.
+- Downstream tasks that are now blocked and still in `in_progress`,
+  `review`, or `done` are automatically downgraded to `backlog`;
+  `actual_end` is cleared and a `task_regressed_downstream` audit-log
+  entry is written for each one. This design change from the original
+  "flag only" plan was forced by Invariant Gate rule #3
+  (`BLOCKED_TASK_ADVANCED`): a blocked task cannot legally remain in a
+  column that implies active progress, so the system must move it before
+  the invariant check runs or the transaction would be rolled back.
+- Downstream tasks that were already in `done` additionally receive a
+  `audit_log(action='needs_reverification')` entry, because a `done`
+  task normally implies its prerequisites stayed satisfied — that
+  assumption just broke, and a human should decide whether to keep it
+  done or regress it further.
 
 ### 3.4 Invariant Gate (`engine/invariants.py`)
 
