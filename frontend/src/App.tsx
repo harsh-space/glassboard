@@ -235,10 +235,10 @@ export const App: React.FC = () => {
     // Priority 1: over is a column droppable (id is column name)
     if (COLUMNS.includes(String(over.id) as ColumnType)) {
       targetColumn = over.id as ColumnType;
-    // Priority 2: over.data.current carries a column identifier (set by useDroppable)
+      // Priority 2: over.data.current carries a column identifier (set by useDroppable)
     } else if (over.data.current?.column && COLUMNS.includes(over.data.current.column)) {
       targetColumn = over.data.current.column as ColumnType;
-    // Priority 3: over is a task — use that task's column
+      // Priority 3: over is a task — use that task's column
     } else {
       const overIdStr = String(over.id).replace("task-", "");
       const overTask = board.tasks.find((t) => t.id === Number(overIdStr));
@@ -536,7 +536,7 @@ export const App: React.FC = () => {
                 task={activeTask}
                 allTasks={board?.tasks || []}
                 isCriticalPath={criticalPathIds.includes(activeTask.id)}
-                onClick={() => {}}
+                onClick={() => { }}
               />
             ) : null}
           </DragOverlay>
@@ -830,6 +830,7 @@ export const App: React.FC = () => {
       {/* AI Suggestions Drawer */}
       <AISuggestionsDrawer
         isOpen={isAiDrawerOpen}
+        boardId={board?.id || activeBoardId}
         suggestions={suggestions}
         allTasks={board?.tasks || []}
         onClose={() => setIsAiDrawerOpen(false)}

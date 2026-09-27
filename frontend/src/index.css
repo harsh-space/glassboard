@@ -27,6 +27,7 @@
   --color-success-bg: #eaf5eb;
   --color-success-border: #c8e6c9;
   --color-error: #c64545;
+  --color-error-hover: #a83a3a;
   --color-error-bg: #fdf0f0;
   --color-error-border: #f8c9c9;
   --color-warning: #b27400;
@@ -71,32 +72,67 @@ button {
   transition: all 0.15s ease;
 }
 
-input, textarea, select {
+input,
+textarea,
+select {
   font-family: inherit;
   font-size: 14px;
 }
 
 /* Animations */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes slideDown {
-  from { opacity: 0; transform: translateY(-8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes pulseBorder {
-  0% { box-shadow: 0 0 0 0 rgba(204, 120, 92, 0.4); }
-  70% { box-shadow: 0 0 0 6px rgba(204, 120, 92, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(204, 120, 92, 0); }
+  0% {
+    box-shadow: 0 0 0 0 rgba(204, 120, 92, 0.4);
+  }
+
+  70% {
+    box-shadow: 0 0 0 6px rgba(204, 120, 92, 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(204, 120, 92, 0);
+  }
 }
 
 @keyframes pulse {
-  0% { opacity: 0.6; transform: scale(0.96); }
-  60% { opacity: 1; transform: scale(1.02); }
-  100% { opacity: 1; transform: scale(1); }
+  0% {
+    opacity: 0.6;
+    transform: scale(0.96);
+  }
+
+  60% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* ─── Custom scrollbar: thin, rounded, matches the warm palette ─── */

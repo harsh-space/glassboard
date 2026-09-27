@@ -141,6 +141,9 @@ def _call_groq_chat(api_key: str, model_name: str, base_url: str, system_prompt:
     """Make a call to Groq API (OpenAI-compatible) with 12s timeout and 1 retry."""
     import httpx
     import json
+    import logging
+
+    logger = logging.getLogger(__name__)
 
     url = f"{base_url.rstrip('/')}/chat/completions"
     headers = {
@@ -167,7 +170,15 @@ def _call_groq_chat(api_key: str, model_name: str, base_url: str, system_prompt:
                     data = res.json()
                     content = data["choices"][0]["message"]["content"]
                     return json.loads(content)
-        except Exception:
+                else:
+                    logger.warning(
+                        "groq_call_non_200: attempt=%s status=%s body=%s",
+                        attempt, res.status_code, res.text[:500],
+                    )
+        except Exception as exc:
+            logger.warning(
+                "groq_call_exception: attempt=%s error=%r", attempt, exc,
+            )
             if attempt == 1:
                 return None
     return None

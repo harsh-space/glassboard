@@ -6,6 +6,7 @@ import { Sparkles, Check, X, AlertTriangle, ArrowRight } from "lucide-react";
 
 interface AISuggestionsDrawerProps {
   isOpen: boolean;
+  boardId: number;
   suggestions: AISuggestion[];
   allTasks: Task[];
   onClose: () => void;
@@ -16,6 +17,7 @@ interface AISuggestionsDrawerProps {
 
 export const AISuggestionsDrawer: React.FC<AISuggestionsDrawerProps> = ({
   isOpen,
+  boardId,
   suggestions,
   allTasks,
   onClose,
@@ -25,14 +27,54 @@ export const AISuggestionsDrawer: React.FC<AISuggestionsDrawerProps> = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showRejected, setShowRejected] = useState(false);
+  const [rejectedList, setRejectedList] = useState<AISuggestion[]>([]);
+  const [rejectedLoading, setRejectedLoading] = useState(false);
+  const [reconsideringId, setReconsideringId] = useState<number | null>(null);
 
   if (!isOpen) return null;
+
+  const loadRejected = async () => {
+    setRejectedLoading(true);
+    try {
+      const res = await api.getRejectedSuggestions(boardId);
+      setRejectedList(res);
+    } catch (err: any) {
+      setError(err.message || "Failed to load rejected suggestions");
+    } finally {
+      setRejectedLoading(false);
+    }
+  };
+
+  const handleToggleRejected = () => {
+    const next = !showRejected;
+    setShowRejected(next);
+    if (next) loadRejected();
+  };
+
+  const handleReconsider = async (id: number) => {
+    setError(null);
+    setReconsideringId(id);
+    try {
+      await api.reconsiderSuggestion(id);
+      setRejectedList((prev) => prev.filter((s) => s.id !== id));
+      onRefreshSuggestions();
+    } catch (err: any) {
+      if (err instanceof ApiRequestError) {
+        setError(`${err.code}: ${err.message}`);
+      } else {
+        setError(err.message || "Failed to reconsider suggestion");
+      }
+    } finally {
+      setReconsideringId(null);
+    }
+  };
 
   const handleGenerate = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.getAISuggestions(1);
+      const res = await api.getAISuggestions(boardId);
       if (onSuggestionsLoaded) {
         onSuggestionsLoaded(res);
       }
@@ -94,7 +136,7 @@ export const AISuggestionsDrawer: React.FC<AISuggestionsDrawerProps> = ({
       }}
     >
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <Sparkles size={20} color="var(--color-primary)" />
           <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "20px", fontWeight: 600 }}>
@@ -106,7 +148,7 @@ export const AISuggestionsDrawer: React.FC<AISuggestionsDrawerProps> = ({
         </button>
       </div>
 
-      <p style={{ fontSize: "13px", color: "var(--color-muted)", marginBottom: "16px", lineHeight: 1.4 }}>
+      <p style={{ fontSize: "13px", color: "var(--color-muted)", marginBottom: "16px", lineHeight: 1.4, flexShrink: 0 }}>
         Guardrailed pipeline: The AI proposes candidate links, deterministic checks verify invariants, and you approve or reject each link.
       </p>
 
@@ -127,10 +169,28 @@ export const AISuggestionsDrawer: React.FC<AISuggestionsDrawerProps> = ({
           gap: "8px",
           marginBottom: "16px",
           opacity: loading ? 0.6 : 1,
+          flexShrink: 0,
         }}
       >
         <Sparkles size={16} />
         <span>{loading ? "Analyzing Board Lifecycle..." : "Find Candidate Dependencies"}</span>
+      </button>
+
+      <button
+        onClick={handleToggleRejected}
+        style={{
+          background: "transparent",
+          color: "var(--color-muted)",
+          padding: "0",
+          fontSize: "12px",
+          fontWeight: 600,
+          textDecoration: "underline",
+          marginBottom: "16px",
+          alignSelf: "flex-start",
+          flexShrink: 0,
+        }}
+      >
+        {showRejected ? "Hide rejected suggestions" : "View rejected suggestions"}
       </button>
 
       {error && (
@@ -145,6 +205,7 @@ export const AISuggestionsDrawer: React.FC<AISuggestionsDrawerProps> = ({
             display: "flex",
             alignItems: "center",
             gap: "6px",
+            flexShrink: 0,
           }}
         >
           <AlertTriangle size={16} />
@@ -152,8 +213,79 @@ export const AISuggestionsDrawer: React.FC<AISuggestionsDrawerProps> = ({
         </div>
       )}
 
-      {/* Suggestions List */}
-      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "12px" }}>
+      {/* Scrollable content: rejected suggestions (when shown) + pending suggestions.
+          This is a single scroll region so a long rejected list scrolls in place
+          instead of pushing the pending list out of the drawer's fixed height. */}
+      <div
+        className="column-scroll"
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: "12px",
+        }}
+      >
+        {showRejected && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px", flexShrink: 0 }}>
+            {rejectedLoading ? (
+              <div style={{ fontSize: "13px", color: "var(--color-muted)" }}>Loading rejected suggestions...</div>
+            ) : rejectedList.length === 0 ? (
+              <div style={{ fontSize: "13px", color: "var(--color-muted)" }}>No rejected suggestions on this board.</div>
+            ) : (
+              rejectedList.map((sug) => {
+                const pTask = allTasks.find((t) => t.id === sug.prerequisite_id);
+                const depTask = allTasks.find((t) => t.id === sug.task_id);
+                return (
+                  <div
+                    key={sug.id}
+                    style={{
+                      background: "var(--color-surface-card)",
+                      border: "1px dashed var(--color-hairline)",
+                      borderRadius: "var(--radius-md)",
+                      padding: "12px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "6px",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 600, fontSize: "13px" }}>
+                      <span style={{ color: "var(--color-muted)" }}>T{sug.prerequisite_id}</span>
+                      <ArrowRight size={13} color="var(--color-muted)" />
+                      <span style={{ color: "var(--color-muted)" }}>T{sug.task_id}</span>
+                    </div>
+                    <div style={{ fontSize: "12px", color: "var(--color-muted)" }}>
+                      <strong>Prereq:</strong> {pTask?.title || `Task #${sug.prerequisite_id}`}
+                      <br />
+                      <strong>Dependent:</strong> {depTask?.title || `Task #${sug.task_id}`}
+                    </div>
+                    <button
+                      onClick={() => handleReconsider(sug.id)}
+                      disabled={reconsideringId === sug.id}
+                      style={{
+                        background: "var(--color-primary-light)",
+                        color: "var(--color-primary-active)",
+                        padding: "6px 12px",
+                        borderRadius: "var(--radius-sm)",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        alignSelf: "flex-start",
+                        opacity: reconsideringId === sug.id ? 0.6 : 1,
+                      }}
+                    >
+                      {reconsideringId === sug.id ? "Reconsidering..." : "Reconsider"}
+                    </button>
+                  </div>
+                );
+              })
+            )}
+            <div style={{ borderBottom: "1px solid var(--color-hairline)", margin: "4px 0" }} />
+          </div>
+        )}
+
+        {/* Pending suggestions */}
         {pendingList.length === 0 ? (
           <div
             style={{
