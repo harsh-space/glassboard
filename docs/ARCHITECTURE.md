@@ -225,7 +225,9 @@ The AI pipeline in `backend/ai/pipeline.py` implements:
   with fabricated evidence or cycle violations are dropped and logged to `audit_log`
   (`action='ai_suggestion_evidence_rejected'` / `action='ai_suggestion_cycle_rejected'`,
   `source='ai'`).
-- **Human review:** Accept / Reject endpoints per §5.4.
+- **Human review:** Accept / Reject / Reconsider endpoints per §5.4 —
+  reconsider moves a rejected suggestion back to `pending` so it isn't
+  permanently excluded.
 
 Rate limiting: one suggestion round per board at a time, enforced by
 `BoardLockContext` (in-memory threading.Lock). A concurrent request returns

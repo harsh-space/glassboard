@@ -56,12 +56,12 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
     const err = typeof detail === "object" && detail?.code
       ? detail
       : {
-          code: `HTTP_${response.status}`,
-          message: typeof detail === "string" 
-            ? detail 
-            : (data?.message || `Server returned error (${response.status}). Please try again.`),
-          details: {},
-        };
+        code: `HTTP_${response.status}`,
+        message: typeof detail === "string"
+          ? detail
+          : (data?.message || `Server returned error (${response.status}). Please try again.`),
+        details: {},
+      };
     throw new ApiRequestError(err.code, err.message, err.details);
   }
 
@@ -204,6 +204,16 @@ export const api = {
 
   getPendingSuggestions: (boardId: number = 1): Promise<AISuggestion[]> => {
     return request<AISuggestion[]>(`/dependencies/suggestions?board_id=${boardId}`);
+  },
+
+  getRejectedSuggestions: (boardId: number): Promise<AISuggestion[]> => {
+    return request<AISuggestion[]>(`/dependencies/suggestions/rejected?board_id=${boardId}`);
+  },
+
+  reconsiderSuggestion: (id: number): Promise<AISuggestion> => {
+    return request<AISuggestion>(`/dependencies/suggestions/${id}/reconsider`, {
+      method: "POST",
+    });
   },
 
   getAISuggestions: (boardId: number = 1, taskId?: number): Promise<AISuggestion[]> => {

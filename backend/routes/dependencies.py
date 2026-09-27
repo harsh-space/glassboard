@@ -246,6 +246,43 @@ def list_pending_suggestions(
     ]
 
 
+@router.get("/suggestions/rejected", response_model=list[dict])
+def list_rejected_suggestions(
+    board_id: int = 1,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_optional),
+):
+    """Fetch previously rejected AI suggestions for the board, so the user can reconsider one."""
+    board = db.query(Board).filter(Board.id == board_id).first()
+    if not board:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "BOARD_NOT_FOUND", "message": "Board not found."},
+        )
+    require_board_access(board, current_user)
+
+    rows = (
+        db.query(AISuggestion)
+        .join(Task, Task.id == AISuggestion.task_id)
+        .filter(Task.board_id == board_id, AISuggestion.status == "rejected")
+        .all()
+    )
+    return [
+        {
+            "id": s.id,
+            "task_id": s.task_id,
+            "prerequisite_id": s.prerequisite_id,
+            "reason": s.reason,
+            "evidence_phrase": s.evidence_phrase,
+            "proposer_confidence": s.proposer_confidence,
+            "challenge_verdict": s.challenge_verdict,
+            "status": s.status,
+            "model_name": s.model_name,
+        }
+        for s in rows
+    ]
+
+
 @router.post("/suggestions", response_model=list[dict])
 def get_ai_suggestions(
     payload: SuggestionsRequest,
@@ -271,7 +308,8 @@ def get_ai_suggestions(
             # Exclude pairs that were previously rejected on this board
             rejected_rows = (
                 db.query(AISuggestion.prerequisite_id, AISuggestion.task_id)
-                .filter(AISuggestion.status == "rejected")
+                .join(Task, Task.id == AISuggestion.task_id)
+                .filter(Task.board_id == payload.board_id, AISuggestion.status == "rejected")
                 .all()
             )
             rejected_pairs = {(r[0], r[1]) for r in rejected_rows}
@@ -393,3 +431,45 @@ def reject_suggestion(
     sug.status = "rejected"
     db.commit()
     return None
+
+
+@router.post("/suggestions/{suggestion_id}/reconsider", response_model=dict)
+def reconsider_suggestion(
+    suggestion_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_optional),
+):
+    """Move a previously rejected suggestion back to pending, so it can be re-evaluated
+    (accepted, rejected again, or left pending) without waiting for the AI to propose it again.
+    A reconsidered suggestion is no longer counted as 'rejected', so it will not be excluded
+    from future pipeline runs either."""
+    sug = db.query(AISuggestion).filter(AISuggestion.id == suggestion_id).first()
+    if not sug:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "SUGGESTION_NOT_FOUND", "message": f"Suggestion {suggestion_id} not found."},
+        )
+
+    task, board = _resolve_board_for_task(sug.task_id, db)
+    require_board_access(board, current_user)
+
+    if sug.status != "rejected":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "INVALID_STATE", "message": "Only a rejected suggestion can be reconsidered."},
+        )
+
+    sug.status = "pending"
+    db.commit()
+
+    return {
+        "id": sug.id,
+        "task_id": sug.task_id,
+        "prerequisite_id": sug.prerequisite_id,
+        "reason": sug.reason,
+        "evidence_phrase": sug.evidence_phrase,
+        "proposer_confidence": sug.proposer_confidence,
+        "challenge_verdict": sug.challenge_verdict,
+        "status": sug.status,
+        "model_name": sug.model_name,
+    }

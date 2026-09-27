@@ -269,7 +269,7 @@ export const BoardDashboard: React.FC<Props> = ({ user, onSelectBoard, onLogout 
       {boardToDelete && (
         <div style={styles.modalOverlay} onClick={() => { setBoardToDelete(null); setDeleteError(null); }}>
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ ...styles.modalTitle, color: "#e53e3e" }}>Delete Board</h2>
+            <h2 style={{ ...styles.modalTitle, color: "var(--color-primary-active)" }}>Delete Board</h2>
             <p style={styles.modalSub}>
               Are you sure you want to delete <strong>"{boardToDelete.name}"</strong>? This will permanently remove the board and all its tasks. This action cannot be undone.
             </p>
@@ -295,7 +295,7 @@ export const BoardDashboard: React.FC<Props> = ({ user, onSelectBoard, onLogout 
                   padding: "10px 18px",
                   borderRadius: "10px",
                   border: "none",
-                  background: "#e53e3e",
+                  background: "var(--color-primary)",
                   color: "#fff",
                   fontSize: "14px",
                   fontWeight: 600,
@@ -321,7 +321,7 @@ export const BoardDashboard: React.FC<Props> = ({ user, onSelectBoard, onLogout 
           background-color: var(--color-primary-active) !important;
         }
         #confirm-delete-board:hover {
-          background: #c53030 !important;
+          background: var(--color-primary-active) !important;
         }
         #logout-btn:hover { background: var(--color-surface-soft) !important; }
         [id^="board-card-"]:hover {
@@ -330,9 +330,9 @@ export const BoardDashboard: React.FC<Props> = ({ user, onSelectBoard, onLogout 
           transform: translateY(-1px);
         }
         [id^="delete-board-btn-"]:hover {
-          background: rgba(229,62,62,0.08) !important;
-          color: #e53e3e !important;
-          border-color: rgba(229,62,62,0.3) !important;
+          background: var(--color-primary-light) !important;
+          color: var(--color-primary-active) !important;
+          border-color: var(--color-primary) !important;
         }
         #new-board-name:focus, #new-board-date:focus {
           outline: none;
@@ -661,4 +661,3 @@ const styles: Record<string, React.CSSProperties> = {
     transition: "background 0.15s ease, color 0.15s ease, border-color 0.15s ease",
   },
 };
-

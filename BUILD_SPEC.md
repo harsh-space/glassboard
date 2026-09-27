@@ -353,6 +353,8 @@ for the exact mechanism.)
 | `POST /dependencies/suggestions` | Trigger the AI pipeline for one task or the whole board | list of surviving `ai_suggestion` rows | `503 AI_UNAVAILABLE` (still 200 with heuristic fallback results — see §5.6) |
 | `POST /dependencies/suggestions/{id}/accept` | Accept — calls the same path as `POST /dependencies` internally | created dependency | same as `POST /dependencies` |
 | `POST /dependencies/suggestions/{id}/reject` | Reject — stored, excluded from future suggestions on that board | 204 | 404 |
+| `GET /dependencies/suggestions/rejected` | List previously rejected suggestions for a board | list of rejected `ai_suggestion` rows | 404 |
+| `POST /dependencies/suggestions/{id}/reconsider` | Reconsider — moves a rejected suggestion back to `pending`, no longer excluded from proposals | updated suggestion | `400 INVALID_STATE` (not rejected), 404 |
 | `GET /boards/{id}/critical-path` | *(Layer 3, optional)* longest chain by duration | `{task_ids: [...], total_duration: N}` | 404 |
 
 Fractional positions: on a drag, the new `position` is computed client-side
@@ -441,7 +443,10 @@ exact same `POST /dependencies` path and cycle check as a manually
 created link — no special AI write path anywhere in the code) or reject
 (`POST /dependencies/suggestions/{id}/reject`, which sets `status =
 'rejected'` and excludes that exact `(prerequisite_id, task_id)` pair from
-future proposals on this board).
+future proposals on this board, unless the rejection is later undone via
+`POST /dependencies/suggestions/{id}/reconsider`, which sets `status` back
+to `'pending'` — see `GET /dependencies/suggestions/rejected` for listing
+rejected candidates).
 
 ### 5.5 Measure
 
