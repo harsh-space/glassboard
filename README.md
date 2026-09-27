@@ -4,10 +4,7 @@
 **Live Demo Links:**
 - **App:** [glassboard-umber.vercel.app](https://glassboard-umber.vercel.app) — click **"Continue as Guest / View Demo Board"** for zero-friction access to the canonical seeded board.
 - **API Docs:** [glassboard-backend.onrender.com/docs](https://glassboard-backend.onrender.com/docs) — interactive Swagger UI for the live deployment.
-- **Submission branch:** `my_sub`
-
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Vercel-black?style=flat&logo=vercel)](https://glassboard-umber.vercel.app)
-[![API Docs](https://img.shields.io/badge/API%20Docs-FastAPI%20%2F%20Render-blue?style=flat&logo=fastapi)](https://glassboard-backend.onrender.com/docs)
+- **Submission branch:** `main`
 
 ---
 
@@ -234,7 +231,6 @@ The interactive Swagger docs for the live deployment are at [glassboard-backend.
 ```bash
 git clone https://github.com/harsh-space/glassboard.git
 cd glassboard
-git checkout my_sub
 
 python -m venv venv
 source venv/bin/activate        # Windows: .\venv\Scripts\Activate.ps1

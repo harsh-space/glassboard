@@ -640,7 +640,7 @@ recorded here and in `docs/ARCHITECTURE.md`.
   keyword heuristic automatically when `GROQ_API_KEY` is unset.
 - **Deployment target:** Render (API), Vercel (frontend), Neon
   (managed PostgreSQL).
-- **Submission branch name:** `my_sub`.
+- **Submission branch name:** `main`.
 - **`actual_end` semantics:** set to `planned_end` (not "today") when a
   task moves to Done, for test determinism. See
   `docs/ARCHITECTURE.md` §2.1 for the tradeoff this implies.
