@@ -5,6 +5,8 @@
 - **App:** [glassboard-umber.vercel.app](https://glassboard-umber.vercel.app) — click **"Continue as Guest / View Demo Board"** for zero-friction access to the canonical seeded board.
 - **API Docs:** [glassboard-backend.onrender.com/docs](https://glassboard-backend.onrender.com/docs) — interactive Swagger UI for the live deployment.
 - **Submission branch:** `main`
+  
+**Demo Video:** [Demo](https://github.com/user-attachments/assets/8f78c0bb-90a5-476c-9a0e-6fc19634090c)
 
 ---
 
