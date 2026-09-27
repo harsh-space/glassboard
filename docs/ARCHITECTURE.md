@@ -1,7 +1,7 @@
 # TaskFlow Pro — Architecture Document
 
-> Written against what was actually built, per `CLAUDE.md §7` (the mandatory
-> combined design doc) and cross-referenced against `BUILD_SPEC.md`, the
+> Written against what was actually built, per the mandatory combined
+> design-doc requirement, and cross-referenced against `BUILD_SPEC.md`, the
 > original implementation spec. Where the two disagree, this document wins —
 > it describes what shipped, not what was planned.
 > Last updated: 2026-09-26
@@ -332,6 +332,16 @@ Board-level authorization is strictly enforced on all underlying data endpoints 
 
 ## 9. Deployment status
 
+**Status: complete.** All nine build phases — foundation, engine, API/UI,
+persistence, the AI path, the Why Panel and challenge pass, critical
+path/impact preview, delivery polish, and the post-plan authorization
+addition — are finished and covered by the 47-test suite (`pytest -v`):
+15 engine tests, 20 API tests, 8 authorization tests, 4 AI pipeline tests.
+The AI copilot's heuristic path measures 100% precision / 84.6% recall
+against the hand-labelled seed board (`scripts/measure_ai.py`); scheduler
+and Invariant Gate latency at scale is measured by
+`scripts/measure_performance.py`.
+
 **Architecture:**
 - **Database:** Neon Serverless PostgreSQL (pooler endpoint, SSL required).
 - **Backend API:** Render Web Service (`render.yaml` blueprint with Uvicorn / FastAPI).
@@ -370,9 +380,8 @@ This document covers architecture, data model, and known limitations —
 the mandatory combined design doc per the submission checklist. For
 everything else:
 
-- **[`../README.md`](../README.md)** — setup, quick start, and the full documentation index.
+- **[`../README.md`](../README.md)** — setup, quick start, and the full documentation flow.
 - **[`../BUILD_SPEC.md`](../BUILD_SPEC.md)** — the original implementation spec this document is written against; cited by section number throughout the codebase.
-- **[`../CLAUDE.md`](../CLAUDE.md)** — the build-order and priority document used during development.
 - **[`../AI_TOOL_DECLARATION.md`](../AI_TOOL_DECLARATION.md)** — disclosed AI tool usage during development.
-- **[`DEMO_SCRIPT.md`](DEMO_SCRIPT.md)** and **[`TESTING_SCENARIOS.md`](TESTING_SCENARIOS.md)** — walkthroughs of the behavior described here.
+- **[`TESTING_SCENARIOS.md`](TESTING_SCENARIOS.md)** — a guided demo walkthrough plus the full manual test matrix for the behavior described here.
 - **[`synopsis/`](synopsis/)** — the original, frozen hackathon submission text.

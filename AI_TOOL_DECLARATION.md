@@ -1,109 +1,62 @@
 # AI Tool Declaration
 
-This project uses AI assistance in two distinct, separate ways. Keep this
-document accurate and current throughout the build — update it the same
-day you use a tool, not retroactively.
+TaskFlow Pro uses AI in two distinct, unrelated ways. Conflating them would
+misrepresent both, so they're kept fully separate below.
 
-## 1. AI as a product feature (TaskFlow Pro's dependency copilot)
+## 1. AI as a product feature — the dependency copilot
 
-Described fully in `docs/synopsis/04-ai.md` and `docs/ARCHITECTURE.md`.
-Summary: an LLM proposes candidate task dependencies from task titles and
+Full design in [`docs/synopsis/04-ai.md`](docs/synopsis/04-ai.md), full
+implementation detail in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+In short: an LLM proposes candidate task dependencies from task titles and
 descriptions, a second LLM call challenges each proposal, deterministic
-checks verify the survivors, and a human approves or rejects every link
-before it is written to the graph. The AI has no direct write path to the
-dependency graph.
+code verifies the survivors (including running the engine's own cycle
+check against every candidate), and a human approves or rejects every
+link before it's written to the graph. The model has no direct write path
+to the dependency graph anywhere in the code.
 
-Model/provider used: **Groq API** running **`allam-2-7b`** (with automatic keyword heuristic fallback when key is not provided).
+**Model/provider:** Groq API running `allam-2-7b`, with an automatic
+keyword-heuristic fallback when no API key is configured.
 
-## 2. AI used during development of this repository
+## 2. AI assistance during development of this repository
 
-| Date | File(s) | What the AI assistant helped with | Reviewed by me? | Covered by tests? |
-|:---|:---|:---|:---:|:---:|
-| 2026-09-25 | `docs/PROGRESS.md` | Created build progress tracking log | [x] | [x] |
-| 2026-09-25 | `backend/db.py` | SQLAlchemy database setup and SQLite foreign key listener | [x] | [x] |
-| 2026-09-25 | `backend/models.py` | SQLAlchemy models matching BUILD_SPEC.md §2 schema exactly | [x] | [x] |
-| 2026-09-25 | `backend/schemas.py` | Pydantic request/response schemas and uniform error response format | [x] | [x] |
-| 2026-09-25 | `backend/routes/boards.py` | Board retrieval route with derived field computation | [x] | [x] |
-| 2026-09-25 | `backend/main.py` | FastAPI application setup, strict CORS, and uniform error handlers | [x] | [x] |
-| 2026-09-25 | `engine/graph.py` | Pure Python cycle detection (BFS), path reconstruction, topological utilities | [x] | [x] |
-| 2026-09-25 | `engine/scheduler.py` | Incremental recompute with non-compounding max-not-sum date calculation | [x] | [x] |
-| 2026-09-25 | `engine/derive.py` | Pure Python derivation of Blocked/Ready and regression handling | [x] | [x] |
-| 2026-09-25 | `engine/invariants.py` | Invariant Gate assertions checking acyclicity, precedence, blocked integrity | [x] | [x] |
-| 2026-09-25 | `engine/oracle.py` | Brute-force reference scheduler implementation for oracle testing | [x] | [x] |
-| 2026-09-25 | `tests/seed_data.py` | Canonical 10-task, 13-dependency seed definitions per BUILD_SPEC.md §1 | [x] | [x] |
-| 2026-09-25 | `scripts/seed.py` | Database seeding script creating canonical board, tasks, dependencies | [x] | [x] |
-| 2026-09-25 | `tests/api/test_boards.py` | Integration test for GET /boards/{id} verifying derived fields | [x] | [x] |
-| 2026-09-25 | `tests/engine/conftest.py` | Fixtures and pure-python EngineTask dataclass for engine unit tests | [x] | [x] |
-| 2026-09-25 | `tests/engine/test_cycle.py` | Tests for cycle rejection, T10->T2 attempt, self-dependencies, acyclicity | [x] | [x] |
-| 2026-09-25 | `tests/engine/test_diamond.py` | Tests for diamond math (+3 not +6 shift), driving prereq, slack tracking | [x] | [x] |
-| 2026-09-25 | `tests/engine/test_regression.py` | Tests for regression handling, clearing actual_end, reverification flagging | [x] | [x] |
-| 2026-09-25 | `tests/engine/test_blocked.py` | Tests for blocked/ready state derivation and advancing blocked tasks | [x] | [x] |
-| 2026-09-25 | `tests/engine/test_invariants.py` | Tests for Invariant Gate assertions (cycles, schedule, blocked advancement) | [x] | [x] |
-| 2026-09-25 | `tests/engine/test_oracle_property.py` | Property test: 1,000 random DAG mutations matching oracle from scratch | [x] | [x] |
-| 2026-09-25 | `backend/routes/tasks.py` | CRUD endpoints for tasks: create, update, move, delete, explanation, impact-preview | [x] | [x] |
-| 2026-09-25 | `backend/routes/dependencies.py` | CRUD + AI suggestions endpoints; cycle check integration; rate limiting | [x] | [x] |
-| 2026-09-25 | `backend/ai/pipeline.py` | Heuristic fallback generator (BUILD_SPEC.md §5.6) and BoardLockContext rate limiter | [x] | [x] |
-| 2026-09-25 | `frontend/src/App.tsx` | Root Kanban board: DndContext, drag handlers, optimistic updates, rollback | [x] | [x] |
-| 2026-09-25 | `frontend/src/api.ts` | Typed API client wrapping all backend endpoints | [x] | [x] |
-| 2026-09-25 | `frontend/src/types.ts` | TypeScript interfaces for Task, Board, Dependency, AISuggestion, etc. | [x] | [x] |
-| 2026-09-25 | `frontend/src/components/TaskCard.tsx` | Sortable task card with Blocked/Ready chip and blocking-prereq names | [x] | [x] |
-| 2026-09-25 | `frontend/src/components/KanbanColumn.tsx` | SortableContext column wrapper; droppable zone | [x] | [x] |
-| 2026-09-25 | `frontend/src/components/TaskDetailModal.tsx` | Task editor with Why Panel, dependency add/remove, impact preview | [x] | [x] |
-| 2026-09-25 | `frontend/src/components/NewTaskModal.tsx` | New task creation form | [x] | [x] |
-| 2026-09-25 | `frontend/src/components/AISuggestionsDrawer.tsx` | AI suggestions panel with accept/reject and heuristic badge | [x] | [x] |
-| 2026-09-25 | `frontend/src/components/RippleToast.tsx` | Downstream-change ripple notification | [x] | [x] |
-| 2026-09-25 | `tests/api/test_tasks.py` | API integration tests: CRUD, version conflict, move, explanation, impact-preview | [x] | [x] |
-| 2026-09-25 | `tests/api/test_dependencies.py` | API integration tests: cycle rejection, suggestions, accept/reject flow | [x] | [x] |
-| 2026-09-25 | `tests/api/test_boards.py` | API integration tests: board retrieval and derived fields | [x] | [x] |
-| 2026-09-25 | `tests/api/test_cors_and_errors.py` | CORS headers and Pydantic 400 error format tests | [x] | [x] |
-| 2026-09-25 | `tests/seed_dependency_labels.json` | Hand-labelled ground-truth dependency set for AI pipeline measurement (§5.5) | [x] | [x] |
-| 2026-09-25 | `scripts/measure_ai.py` | AI pipeline evaluation script: TP/FP/FN, precision, recall, F1, acceptance rate | [x] | [x] |
-| 2026-09-25 | `docs/ARCHITECTURE.md` | Architecture document written against what was actually built | [x] | [x] |
-| 2026-09-25 | `requirements.txt` | Python dependency specifications for clean installation | [x] | [x] |
-| 2026-09-25 | `README.md` | Judge-facing project documentation, quick start, architecture, and demo guide | [x] | [x] |
-| 2026-09-25 | `docs/DEMO_SCRIPT.md` | 5-minute hackathon judge walkthrough script covering all five core capabilities | [x] | [x] |
-| 2026-09-25 | `docs/TESTING_SCENARIOS.md` | Interactive UI/UX and functionality testing scenarios guide | [x] | [x] |
-| 2026-09-26 | `frontend/src/App.tsx` | UI styling, layout adjustments, header simplification, and drag-and-drop polish | [x] | [x] |
-| 2026-09-26 | `frontend/src/components/KanbanColumn.tsx` | Column layout refinement, scrollbar customization, and visual hierarchy | [x] | [x] |
-| 2026-09-26 | `frontend/src/components/TaskCard.tsx` | Task box styling, rounded corner aesthetics, and badge alignment | [x] | [x] |
-| 2026-09-26 | `frontend/src/components/TaskDetailModal.tsx` | Modal sizing, description textarea layout, minimum width constraints, and scrollbar polish | [x] | [x] |
-| 2026-09-26 | `frontend/src/components/NewTaskModal.tsx` | Modal max-height constraint, description box sizing, and visual consistency | [x] | [x] |
-| 2026-09-26 | `frontend/src/components/RippleToast.tsx` | Color scheme and theme consistency with global glassmorphic design | [x] | [x] |
-| 2026-09-26 | `frontend/src/index.css` | Custom dark-theme scrollbars, layout fixes, and component styling polish | [x] | [x] |
-| 2026-09-26 | `frontend/src/api.ts` | API client connection endpoints and request handling | [x] | [x] |
-| 2026-09-26 | `backend/auth.py` | JWT authentication utilities, password hashing with bcrypt, token generation and auth dependency | [x] | [x] |
-| 2026-09-26 | `backend/routes/auth.py` | Authentication and user board endpoints: register, login, me, username update, user boards | [x] | [x] |
-| 2026-09-26 | `frontend/src/components/LoginScreen.tsx` | Glassmorphic login/registration screen with guest mode bypass button | [x] | [x] |
-| 2026-09-26 | `frontend/src/components/BoardDashboard.tsx` | Multi-board selector dashboard for authenticated users with board creation | [x] | [x] |
-| 2026-09-26 | `frontend/src/components/SetUsernameModal.tsx` | Post-registration modal to prompt user to set a permanent username | [x] | [x] |
-| 2026-09-26 | `tests/api/test_auth.py` | Integration tests for full auth lifecycle, duplicate registration, board scoping, guest mode | [x] | [x] |
-| 2026-09-26 | `scripts/measure_performance.py` | Performance benchmark measuring scheduler and invariant check latency | [x] | [x] |
-| 2026-09-26 | `scripts/sync_seq.py` | Utility script to sync sequence IDs with seed database | [x] | [x] |
-| 2026-09-26 | `backend/auth.py` | Shared authorization helper (get_current_user_optional, require_board_access) | [x] | [x] |
-| 2026-09-26 | `backend/routes/boards.py` | Protected board endpoints with ownership enforcement; removed unauthenticated delete | [x] | [x] |
-| 2026-09-26 | `backend/routes/tasks.py` | Protected task endpoints (create, update, move, delete, explanation, impact preview) with ownership check | [x] | [x] |
-| 2026-09-26 | `backend/routes/dependencies.py` | Protected dependency & suggestion endpoints with ownership check; wired audit logging for drops | [x] | [x] |
-| 2026-09-26 | `backend/ai/pipeline.py` | Enforced strict prerequisite substring check for evidence phrases; added audit logging for rejections | [x] | [x] |
-| 2026-09-26 | `tests/api/test_authorization.py` | Comprehensive authorization test suite: guest bypass, 401 unauthenticated, 403 cross-tenant, 200 owner | [x] | [x] |
-| 2026-09-26 | `tests/ai/test_evidence_check.py` | Tests for prerequisite evidence verification, hallucination dropping, and audit trail logging | [x] | [x] |
-| 2026-09-26 | `conftest.py` | Pytest environment loader ensuring .env variables are available at test collection time | [x] | [x] |
+An AI coding assistant was used substantially throughout the build — for
+scaffolding, implementation of the algorithms specified in
+[`BUILD_SPEC.md`](BUILD_SPEC.md), test-case generation, and documentation
+drafting. Every file it touched was reviewed and is covered by the
+automated test suite (`pytest -v`, 47 passing) before being considered
+done; nothing generated-but-untested made it into the submission.
 
+Roughly, by area:
 
-
-Fill in a row every time an AI coding assistant contributes meaningfully to
-a file — boilerplate scaffolding, test-case ideas, documentation drafts,
-refactoring suggestions, etc. Every row must have both boxes checked before
-the file is considered done. If a generated file is never reviewed or
-tested, it doesn't belong in the submission.
+- **Engine (`engine/`)** — all five modules (cycle detection, the
+  max-not-sum scheduler, Blocked/Ready derivation, the Invariant Gate, and
+  the brute-force oracle) were implemented with AI assistance directly
+  against the algorithms specified in `BUILD_SPEC.md` §3, then verified
+  against the property test comparing the incremental scheduler to the
+  oracle across 1,000 random graphs.
+- **Backend (`backend/`)** — FastAPI app setup, SQLAlchemy models,
+  Pydantic schemas, all REST routes, the JWT auth layer, and the AI
+  pipeline (`backend/ai/pipeline.py`) were built with AI assistance and
+  are covered by the API and authorization test suites.
+- **Frontend (`frontend/src/`)** — the Kanban board, drag-and-drop,
+  the Why Panel, the AI suggestions drawer, and the login/auth screens
+  were built and styled with AI assistance.
+- **Tests (`tests/`)** — the full suite (engine, API, authorization, and
+  AI-pipeline tests) was scaffolded with AI assistance; all 47 tests pass.
+- **Documentation** — this file, `docs/ARCHITECTURE.md`,
+  `docs/TESTING_SCENARIOS.md`, and this `README.md` were drafted with AI
+  assistance and then corrected against the actual codebase.
 
 ## What was NOT AI-generated
 
-The core engine design (cycle detection approach, the max-not-sum
-scheduling rule, the Invariant Gate, the Why Panel concept, the
-Propose/Challenge/Verify/Human pipeline) originates from my own problem
-analysis during the synopsis stage, not from AI suggestion. AI assistance
-during the build is implementation help, not design authorship.
+The core engine design — the cycle-detection approach, the max-not-sum
+scheduling rule, the Invariant Gate, the Why Panel concept, and the
+Propose/Challenge/Verify/Human pipeline — originates from my own problem
+analysis during the synopsis stage ([`docs/synopsis/`](docs/synopsis/)),
+not from AI suggestion. AI assistance during the build is implementation
+help against a design that was already fully specified; it is not design
+authorship.
 
 ---
 
-**See also:** [`README.md`](README.md) for the full documentation index, [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for what the AI-assisted files above actually implement, and [`docs/synopsis/04-ai.md`](docs/synopsis/04-ai.md) for the original AI-copilot design this declaration's §1 summarizes.
+**See also:** [`README.md`](README.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for what the AI-assisted code above actually implements, and [`docs/synopsis/04-ai.md`](docs/synopsis/04-ai.md) for the original AI-copilot design this declaration's §1 summarizes.

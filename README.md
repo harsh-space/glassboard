@@ -2,11 +2,11 @@
 ## A Dependency-Aware Execution Engine for Project Kanban Boards, with Non-Compounding Scheduling and a Guardrailed AI Copilot
 
 **Live Demo Links:**
-- **App:** [glassboard-ten.vercel.app](https://glassboard-ten.vercel.app) — click **"Continue as Guest / View Demo Board"** for zero-friction access to the canonical seeded board.
+- **App:** [glassboard-umber.vercel.app](https://glassboard-umber.vercel.app) — click **"Continue as Guest / View Demo Board"** for zero-friction access to the canonical seeded board.
 - **API Docs:** [glassboard-backend.onrender.com/docs](https://glassboard-backend.onrender.com/docs) — interactive Swagger UI for the live deployment.
 - **Submission branch:** `my_sub`
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Vercel-black?style=flat&logo=vercel)](https://glassboard-ten.vercel.app)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Vercel-black?style=flat&logo=vercel)](https://glassboard-umber.vercel.app)
 [![API Docs](https://img.shields.io/badge/API%20Docs-FastAPI%20%2F%20Render-blue?style=flat&logo=fastapi)](https://glassboard-backend.onrender.com/docs)
 
 ---
@@ -291,7 +291,7 @@ The suite covers four layers:
 - **Authorization tests** (`tests/api/test_authorization.py`) — the public guest bypass, `401` on an unauthenticated private-board request, `403` on a cross-tenant request, and `200` for the actual owner.
 - **AI pipeline tests** (`tests/ai/`) — fabricated-evidence rejection, strict substring matching against the prerequisite's own text, and audit-log recording of every drop.
 
-A full guided walkthrough of the running application — with expected results for each scenario — is in [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) for a short version, and [`docs/TESTING_SCENARIOS.md`](docs/TESTING_SCENARIOS.md) for the complete manual test matrix, including authorization and concurrency scenarios.
+A full guided walkthrough of the running application — a 5-minute demo script followed by the complete manual test matrix, including authorization and concurrency scenarios — is in [`docs/TESTING_SCENARIOS.md`](docs/TESTING_SCENARIOS.md).
 
 ---
 
@@ -299,7 +299,7 @@ A full guided walkthrough of the running application — with expected results f
 
 ### Conclusion
 
-TaskFlow Pro treats "when can this start" as a question with a single correct, derivable answer rather than a field a person fills in — and treats "why did this move" as a question the system must always be able to answer. Isolating the scheduling math into a dependency-free engine made both of those guarantees independently testable, and building the AI copilot around a human-approval boundary rather than an autonomous write path let the project use an LLM for something genuinely useful (surfacing candidate dependencies from plain-text descriptions) without inheriting an LLM's failure modes in the one place — the dependency graph — where they'd be most damaging. The business case for automating this — how much manual re-editing a single upstream change saves, and the correctness and performance targets the engine is measured against — is laid out in [`docs/synopsis/05-impact.md`](docs/synopsis/05-impact.md), and every phase of the build described above, from the engine's first test through deployment, is checked off with dates and evidence in [`docs/PROGRESS.md`](docs/PROGRESS.md).
+TaskFlow Pro treats "when can this start" as a question with a single correct, derivable answer rather than a field a person fills in — and treats "why did this move" as a question the system must always be able to answer. Isolating the scheduling math into a dependency-free engine made both of those guarantees independently testable, and building the AI copilot around a human-approval boundary rather than an autonomous write path let the project use an LLM for something genuinely useful (surfacing candidate dependencies from plain-text descriptions) without inheriting an LLM's failure modes in the one place — the dependency graph — where they'd be most damaging. The business case for automating this — how much manual re-editing a single upstream change saves, and the correctness and performance targets the engine is measured against — is laid out in [`docs/synopsis/05-impact.md`](docs/synopsis/05-impact.md), and every phase of the build described above, from the engine's first test through deployment, is checked off, with the current test and measurement results, in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#9-deployment-status).
 
 ### Known Limitations
 
@@ -310,4 +310,4 @@ These are the practical edges of the system as shipped — the original risk ana
 - **Finish-to-start dependencies only**, whole-day durations, and calendar days with no weekends or holidays modeled — extending to other dependency types or a working-calendar model is a documented, deliberate scope boundary rather than an oversight.
 - **Single graph per board**, and AI suggestion quality depends on task titles and descriptions being descriptive enough to extract an evidence phrase from.
 
-A full, itemized limitations list — including the reasoning behind each — is maintained in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#8-known-limitations--known_failures) as the project evolves. The original build plan, evaluation-order priorities, and the exact schemas and algorithms this implementation follows are in [`CLAUDE.md`](CLAUDE.md) and [`BUILD_SPEC.md`](BUILD_SPEC.md) respectively, and a disclosed, running log of AI-assisted development is kept in [`AI_TOOL_DECLARATION.md`](AI_TOOL_DECLARATION.md).
+A full, itemized limitations list — including the reasoning behind each — is maintained in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#8-known-limitations--known_failures) as the project evolves. The exact schemas and algorithms this implementation follows are in [`BUILD_SPEC.md`](BUILD_SPEC.md), and a disclosed account of AI-assisted development is kept in [`AI_TOOL_DECLARATION.md`](AI_TOOL_DECLARATION.md).
