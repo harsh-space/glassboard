@@ -43,6 +43,8 @@ Thumbs.db
 coverage/
 .coverage
 htmlcov/
+commit_report.py
+COMMITS_REPORT.md
 
 # --- Build artifacts ---
 *.tgz

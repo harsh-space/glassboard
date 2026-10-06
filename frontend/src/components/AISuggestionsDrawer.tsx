@@ -26,6 +26,7 @@ export const AISuggestionsDrawer: React.FC<AISuggestionsDrawerProps> = ({
   onSuggestionApplied,
 }) => {
   const [loading, setLoading] = useState(false);
+  const [hasGeneratedSuggestions, setHasGeneratedSuggestions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showRejected, setShowRejected] = useState(false);
   const [rejectedList, setRejectedList] = useState<AISuggestion[]>([]);
@@ -75,6 +76,7 @@ export const AISuggestionsDrawer: React.FC<AISuggestionsDrawerProps> = ({
     setError(null);
     try {
       const res = await api.getAISuggestions(boardId);
+      setHasGeneratedSuggestions(true);
       if (onSuggestionsLoaded) {
         onSuggestionsLoaded(res);
       }
@@ -177,6 +179,7 @@ export const AISuggestionsDrawer: React.FC<AISuggestionsDrawerProps> = ({
       </button>
 
       <button
+        hidden
         onClick={handleToggleRejected}
         style={{
           background: "transparent",
@@ -298,12 +301,15 @@ export const AISuggestionsDrawer: React.FC<AISuggestionsDrawerProps> = ({
               border: "1px dashed var(--color-hairline)",
             }}
           >
-            No pending suggestions. Click the button above to run the dependency copilot on this board.
+            {hasGeneratedSuggestions
+              ? "No new supported dependencies were found. Existing links and rejected suggestions are skipped; add task details or dependencies if you expect another link."
+              : "No pending suggestions. Click the button above to check for new dependency links."}
           </div>
         ) : (
           pendingList.map((sug) => {
             const pTask = allTasks.find((t) => t.id === sug.prerequisite_id);
             const depTask = allTasks.find((t) => t.id === sug.task_id);
+            const alignedReason = `${pTask?.title || `Task #${sug.prerequisite_id}`} may need to finish before ${depTask?.title || `Task #${sug.task_id}`} starts.`;
 
             return (
               <div
@@ -335,7 +341,7 @@ export const AISuggestionsDrawer: React.FC<AISuggestionsDrawerProps> = ({
                       fontWeight: 600,
                     }}
                   >
-                    {sug.model_name === "heuristic-fallback" ? "Heuristic" : `${Math.round(sug.proposer_confidence * 100)}%`}
+                    {sug.model_name === "heuristic-fallback" ? "Heuristic" : "AI"}
                   </span>
                 </div>
 
@@ -346,7 +352,7 @@ export const AISuggestionsDrawer: React.FC<AISuggestionsDrawerProps> = ({
                 </div>
 
                 <div style={{ fontSize: "13px", color: "var(--color-body)", fontStyle: "italic", lineHeight: 1.35 }}>
-                  "{sug.reason}"
+                  "{alignedReason}"
                 </div>
 
                 {sug.evidence_phrase && (

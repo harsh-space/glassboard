@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-scripts/measure_ai.py — AI pipeline evaluation against the canonical seed board.
+scripts/measure_ai.py — heuristic fallback evaluation against the canonical seed board.
 
 Usage:
     python scripts/measure_ai.py
 
-Runs the AI suggestions pipeline against the seeded board (board_id=1) and
+Runs the deterministic heuristic against in-memory canonical seed tasks and
 reports precision, recall, F1, and acceptance rate relative to the hand-labelled
 ground-truth in tests/seed_dependency_labels.json.
 
@@ -17,15 +17,15 @@ Document actual numbers in docs/ARCHITECTURE.md.
 """
 import json
 import sys
+from datetime import date
 from pathlib import Path
 
 # Add repo root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from scripts.seed import seed_database
-from backend.db import SessionLocal
-from backend.models import Task, Dependency, AISuggestion
 from backend.ai.pipeline import generate_heuristic_suggestions
+from engine.models import EngineTask
+from tests.seed_data import SEED_TASKS
 
 
 LABELS_PATH = Path(__file__).parent.parent / "tests" / "seed_dependency_labels.json"
@@ -37,16 +37,24 @@ def load_ground_truth() -> set[tuple[int, int]]:
     return {(dep["prerequisite_id"], dep["task_id"]) for dep in data["true_dependencies"]}
 
 
-def run_pipeline_against_empty_graph(db) -> list[dict]:
+def run_pipeline_against_empty_graph() -> list[dict]:
     """
-    Run heuristic against board 1 with ALL existing edges cleared so the
-    heuristic has a blank slate to propose from. This is the correct way
-    to measure recall — we want to know which of the 13 ground-truth edges
-    the pipeline would discover independently.
+    Run the fallback heuristic against the canonical seed tasks with an empty
+    graph. This measures which ground-truth edges it discovers independently.
 
-    Does NOT modify the database — uses in-memory edge_pairs = set().
+    Uses in-memory task objects and does not read or modify the application DB.
     """
-    tasks = db.query(Task).filter(Task.board_id == 1).all()
+    base_date = date(2026, 10, 1)
+    tasks = [
+        EngineTask(
+            id=item["id"],
+            title=item["title"],
+            description=item["description"],
+            duration_days=item["duration_days"],
+            board_start_date=base_date,
+        )
+        for item in SEED_TASKS
+    ]
 
     suggestions = generate_heuristic_suggestions(
         all_tasks=tasks,
@@ -90,17 +98,10 @@ def main():
     print("TaskFlow Pro — AI Pipeline Measurement (BUILD_SPEC.md §5.5)")
     print("=" * 60)
 
-    # Ensure a fresh seeded DB
-    seed_database()
-
     ground_truth = load_ground_truth()
     print(f"Ground truth dependencies loaded: {len(ground_truth)}")
 
-    db = SessionLocal()
-    try:
-        suggestions = run_pipeline_against_empty_graph(db)
-    finally:
-        db.close()
+    suggestions = run_pipeline_against_empty_graph()
 
     suggested_pairs = {(s["prerequisite_id"], s["task_id"]) for s in suggestions}
 

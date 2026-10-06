@@ -47,27 +47,10 @@ export const LoginScreen: React.FC<Props> = ({ onAuth, onGuestAccess }) => {
   return (
     <div style={styles.page}>
       <div style={styles.card}>
-        {/* Brand header */}
-        <div style={styles.logoRow}>
-          <div style={styles.logoIcon}>
-            <svg width="24" height="24" viewBox="0 0 28 28" fill="none">
-              <rect width="28" height="28" rx="8" fill="var(--color-primary)" />
-              <path
-                d="M7 14L11 18L21 8"
-                stroke="white"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </div>
-          <span style={styles.logoText}>TaskFlow Pro</span>
-        </div>
-
-        <h1 style={styles.title}>
+        <h1 style={{ ...styles.title, textAlign: "center" }}>
           {mode === "login" ? "Welcome back" : "Create your account"}
         </h1>
-        <p style={styles.subtitle}>
+        <p style={{ ...styles.subtitle, textAlign: "center" }}>
           {mode === "login"
             ? "Sign in to access your project boards"
             : "Get started with AI-powered project management"}
@@ -221,7 +204,7 @@ export const LoginScreen: React.FC<Props> = ({ onAuth, onGuestAccess }) => {
                 e.currentTarget.style.borderColor = "var(--color-hairline)";
               }}
             >
-              <span>Continue as Guest / View Demo Board</span>
+              <span>View Demo Board</span>
               <ArrowRight size={14} color="var(--color-primary)" />
             </button>
           </>

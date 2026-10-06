@@ -92,6 +92,68 @@ def test_ai_suggestions_heuristic_fallback_when_key_unset(monkeypatch):
         assert "evidence_phrase" in first_sug
 
 
+def test_legacy_llm_suggestions_are_hidden_and_superseded(monkeypatch):
+    """Old LLM output must not appear or block a regenerated pair."""
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+
+    db = SessionLocal()
+    legacy = AISuggestion(
+        task_id=10,
+        prerequisite_id=1,
+        reason="Requirements Gathering must be completed before Frontend Implementation.",
+        evidence_phrase="Requirements Gathering",
+        proposer_confidence=0.95,
+        challenge_verdict="survived",
+        status="pending",
+        model_name="groq/allam-2-7b",
+        prompt_version="groq-allam-v1",
+    )
+    db.add(legacy)
+    db.commit()
+    db.refresh(legacy)
+    legacy_id = legacy.id
+    db.close()
+
+    pending_response = client.get("/api/dependencies/suggestions", params={"board_id": 1})
+    assert pending_response.status_code == 200
+    assert legacy_id not in {item["id"] for item in pending_response.json()}
+
+    generate_response = client.post("/api/dependencies/suggestions", json={"board_id": 1})
+    assert generate_response.status_code == 200
+
+    db = SessionLocal()
+    refreshed_legacy = db.query(AISuggestion).filter(AISuggestion.id == legacy_id).first()
+    assert refreshed_legacy.status == "superseded"
+    db.close()
+
+
+def test_pending_suggestion_reason_is_built_from_its_task_pair():
+    """Stored LLM text cannot display task names that differ from the pair."""
+    db = SessionLocal()
+    suggestion = AISuggestion(
+        task_id=4,
+        prerequisite_id=1,
+        reason="Requirements Gathering must be completed before Database Schema Design.",
+        evidence_phrase="requirements",
+        proposer_confidence=0.9,
+        challenge_verdict="survived",
+        status="pending",
+        model_name="groq/allam-2-7b",
+        prompt_version="groq-pair-grounded-v2",
+    )
+    db.add(suggestion)
+    db.commit()
+    db.refresh(suggestion)
+    suggestion_id = suggestion.id
+    db.close()
+
+    response = client.get("/api/dependencies/suggestions", params={"board_id": 1})
+    assert response.status_code == 200
+    item = next(value for value in response.json() if value["id"] == suggestion_id)
+    assert item["reason"] == "Requirements Gathering may need to finish before Backend API Development starts."
+
+
 def test_ai_suggestions_live_groq_when_key_set():
     """
     When GROQ_API_KEY is configured, the endpoint returns suggestions from Groq allam-2-7b.
