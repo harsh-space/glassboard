@@ -378,6 +378,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
         {/* --- IMPACT PREVIEW / DRY RUN (BUILD_SPEC.md §4 & §7) --- */}
         <div
+          hidden
           style={{
             background: "var(--color-surface-soft)",
             border: "1px solid var(--color-hairline)",

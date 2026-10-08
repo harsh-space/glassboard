@@ -32,15 +32,15 @@ an unrelated upstream warning, not a problem with this codebase.
 | Engine | `tests/engine/test_oracle_property.py` | 1 | Property test: incremental scheduler agrees with the brute-force oracle across 1,000 randomly generated graphs |
 | API | `tests/api/test_boards.py` | 2 | Board retrieval (seeded board, 404 for missing board) |
 | API | `tests/api/test_tasks.py` | 11 | Task CRUD, optimistic-concurrency `409 VERSION_CONFLICT`, blocked-move rejection, valid move, Why Panel explanation endpoint, impact-preview dry run, regression downgrade of downstream tasks, invalid-column rejection on move and create, same-column reorder |
-| API | `tests/api/test_dependencies.py` | 8 | Cycle rejection via the API, self/duplicate dependency rejection, dependency deletion, AI suggestion generation (both heuristic-fallback and live-Groq-key paths), accept/reject flow, rate limiting |
+| API | `tests/api/test_dependencies.py` | 10 | Cycle rejection via the API, self/duplicate dependency rejection, dependency deletion, AI suggestion generation, legacy LLM suggestion superseding, pair-aligned reason serialization, accept/reject flow, rate limiting |
 | API | `tests/api/test_invariant_gate.py` | 1 | **New.** Drives an `INVARIANT_VIOLATION` (`BLOCKED_TASK_ADVANCED`) through the actual `POST /dependencies` endpoint — not just the engine — and asserts the 409, full transaction rollback (no dependency row persisted, task state untouched), and that the `invariant_gate_failed` audit record is still written on its own independent session despite the rollback |
 | API | `tests/api/test_authorization.py` | 8 | Guest board reachable with no token; private board returns `401`/`403`/`200` correctly for no-token / wrong-user / owner requests, across both board and task-creation endpoints |
 | API | `tests/api/test_auth.py` | 1 | Full auth flow: register, login, token issuance |
 | API | `tests/api/test_cors_and_errors.py` | 2 | Pydantic validation errors return clean `400`s; CORS headers are present and correct |
-| AI | `tests/ai/test_evidence_check.py` | 5 | Deterministic verification step: valid evidence survives, hallucinated evidence (not present in the prerequisite's own text) is dropped, evidence found only in the dependent's text (not the prerequisite's) is dropped, every drop is written to the audit log, and a Challenge-call failure resolves to a `not_run` verdict rather than crashing |
+| AI | `tests/ai/test_evidence_check.py` | 6 | Evidence is grounded in dependent-task text, generated reasons stay consistent with validated task IDs, target-task scope is enforced, invalid evidence is audited, and challenge-call failure falls back to the heuristic rather than accepting unverified LLM proposals |
 | AI | `tests/ai/test_propose_task_filter.py` | 2 | **New.** BUILD_SPEC.md §5.1's Propose-call task filter: a task already linked to the target task by an existing dependency edge is excluded from the prompt; a whole-board run (no single target) keeps every task in scope |
 
-**Total: 55 / 55.**
+**Total: 57 / 57.**
 
 ---
 

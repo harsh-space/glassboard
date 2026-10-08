@@ -25,7 +25,7 @@ import { RippleToast } from "./components/RippleToast";
 import { LoginScreen } from "./components/LoginScreen";
 import { BoardDashboard } from "./components/BoardDashboard";
 import { SetUsernameModal } from "./components/SetUsernameModal";
-import { Sparkles, Plus, GitBranch, ChevronLeft, Lock, X } from "lucide-react";
+import { Sparkles, Plus, GitBranch, ChevronLeft, Lock, RefreshCw, X } from "lucide-react";
 
 type AppScreen = "login" | "dashboard" | "board";
 
@@ -34,7 +34,7 @@ interface MovementBannerData {
   taskTitle?: string;
   sourceColumn?: string;
   targetColumn?: string;
-  type: "TASK_BLOCKED" | "INVARIANT_VIOLATION" | "GENERAL_ERROR";
+  type: "TASK_BLOCKED" | "INVARIANT_VIOLATION" | "VERSION_CONFLICT" | "GENERAL_ERROR";
   title: string;
   reason: string;
   blockingTasks?: Array<{ id: number; title: string }>;
@@ -65,8 +65,8 @@ function getSavedUser(): AuthUser | null {
 }
 
 export const App: React.FC = () => {
-  const [screen, setScreen] = useState<AppScreen>("login");
-  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() => getSavedUser());
+  const [screen, setScreen] = useState<AppScreen>(authUser ? "dashboard" : "login");
   const [activeBoardId, setActiveBoardId] = useState<number>(1);
 
   const [board, setBoard] = useState<Board | null>(null);
@@ -102,15 +102,6 @@ export const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, [downstreamChanges]);
 
-  // On mount: restore session
-  useEffect(() => {
-    const saved = getSavedUser();
-    if (saved) {
-      setAuthUser(saved);
-      setScreen("dashboard");
-    }
-  }, []);
-
   const handleAuth = (user: AuthUser) => {
     setAuthUser(user);
     setScreen("dashboard");
@@ -121,6 +112,8 @@ export const App: React.FC = () => {
     localStorage.removeItem("auth_user");
     setAuthUser(null);
     setBoard(null);
+    setActiveBoardId(1);
+    setLoading(false);
     setScreen("login");
   };
 
@@ -227,6 +220,28 @@ export const App: React.FC = () => {
     setMovementBanner(null);
   };
 
+  const refreshAfterVersionConflict = async (task: Task, targetColumnTitle: string) => {
+    try {
+      const refreshedBoard = await api.getBoard(activeBoardId);
+      setBoard(refreshedBoard);
+      setMovementBanner({
+        taskId: task.id,
+        taskTitle: task.title,
+        sourceColumn: task.column,
+        targetColumn: targetColumnTitle,
+        type: "VERSION_CONFLICT",
+        title: "Board Refreshed",
+        reason: "This task changed since the board loaded. Review the latest state before trying again.",
+      });
+    } catch (refreshError: any) {
+      setMovementBanner({
+        type: "GENERAL_ERROR",
+        title: "Board Refresh Failed",
+        reason: refreshError?.message || "The task changed, but the latest board could not be loaded. Please refresh the page.",
+      });
+    }
+  };
+
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveTask(null);
@@ -303,15 +318,19 @@ export const App: React.FC = () => {
         }
       } catch (err: any) {
         setBoard(previousBoard);
-        setMovementBanner({
-          taskId: task.id,
-          taskTitle: task.title,
-          sourceColumn: task.column,
-          targetColumn: formatColumnName(task.column),
-          type: "GENERAL_ERROR",
-          title: "Reorder Failed",
-          reason: err.message || "Failed to reorder task.",
-        });
+        if (err?.code === "VERSION_CONFLICT") {
+          await refreshAfterVersionConflict(task, formatColumnName(task.column));
+        } else {
+          setMovementBanner({
+            taskId: task.id,
+            taskTitle: task.title,
+            sourceColumn: task.column,
+            targetColumn: formatColumnName(task.column),
+            type: "GENERAL_ERROR",
+            title: "Reorder Failed",
+            reason: err.message || "Failed to reorder task.",
+          });
+        }
       }
       return;
     }
@@ -333,7 +352,9 @@ export const App: React.FC = () => {
       }
     } catch (err: any) {
       setBoard(previousBoard);
-      if (err?.code === "TASK_BLOCKED") {
+      if (err?.code === "VERSION_CONFLICT") {
+        await refreshAfterVersionConflict(task, targetColumnTitle);
+      } else if (err?.code === "TASK_BLOCKED") {
         let blocking: Array<{ id: number; title: string }> = err.details?.blocking_prerequisites || [];
         if (!blocking.length && task.blocking_prerequisite_ids?.length) {
           blocking = board.tasks
@@ -471,7 +492,7 @@ export const App: React.FC = () => {
             }}
           >
             <ChevronLeft size={15} />
-            {authUser ? "Boards" : "Login / Exit"}
+            {authUser ? "Boards" : "Exit"}
           </button>
 
           <div>
@@ -648,13 +669,23 @@ export const App: React.FC = () => {
             )}
 
             {movementBanner && (
-              <div style={{ pointerEvents: "auto" }}>
+              <div
+                style={{
+                  pointerEvents: "auto",
+                  display: movementBanner.type === "VERSION_CONFLICT" ? "none" : undefined,
+                }}
+              >
                 <div
                   style={{
+                    ...(movementBanner.type === "VERSION_CONFLICT" ? {
+                      border: "1px solid var(--color-hairline)",
+                      borderLeft: "4px solid var(--color-muted)",
+                    } : {
+                      border: "1px solid var(--color-hairline)",
+                      borderLeft: "4px solid var(--color-error)",
+                    }),
                     marginTop: 0,
                     background: "var(--color-surface-soft)",
-                    border: "1px solid var(--color-hairline)",
-                    borderLeft: "4px solid var(--color-error)",
                     borderRadius: "var(--radius-lg)",
                     padding: "14px 20px",
                     boxShadow: "var(--shadow-sm)",
@@ -671,15 +702,17 @@ export const App: React.FC = () => {
                         width: "32px",
                         height: "32px",
                         borderRadius: "var(--radius-pill)",
-                        background: "var(--color-error-bg)",
-                        border: "1px solid var(--color-error-border)",
+                        background: movementBanner.type === "VERSION_CONFLICT" ? "var(--color-surface-card)" : "var(--color-error-bg)",
+                        border: movementBanner.type === "VERSION_CONFLICT" ? "1px solid var(--color-hairline)" : "1px solid var(--color-error-border)",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                         flexShrink: 0,
                       }}
                     >
-                      <Lock size={15} color="var(--color-error)" />
+                      {movementBanner.type === "VERSION_CONFLICT"
+                        ? <RefreshCw size={15} color="var(--color-muted)" />
+                        : <Lock size={15} color="var(--color-error)" />}
                     </div>
 
                     <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
@@ -689,9 +722,9 @@ export const App: React.FC = () => {
                             fontFamily: "var(--font-sans)",
                             fontSize: "11px",
                             fontWeight: 600,
-                            color: "var(--color-error)",
-                            background: "var(--color-error-bg)",
-                            border: "1px solid var(--color-error-border)",
+                            color: movementBanner.type === "VERSION_CONFLICT" ? "var(--color-muted)" : "var(--color-error)",
+                            background: movementBanner.type === "VERSION_CONFLICT" ? "var(--color-surface-card)" : "var(--color-error-bg)",
+                            border: movementBanner.type === "VERSION_CONFLICT" ? "1px solid var(--color-hairline)" : "1px solid var(--color-error-border)",
                             padding: "2px 8px",
                             borderRadius: "var(--radius-pill)",
                             textTransform: "uppercase",

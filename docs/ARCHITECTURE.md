@@ -253,11 +253,9 @@ The AI pipeline in `backend/ai/pipeline.py` implements:
   heuristic from `BUILD_SPEC.md §5.6`.
 - **Challenge:** Not run in heuristic mode (verdict = "not_run").
 - **Verify:** Deterministic verification checks per `BUILD_SPEC.md §5.3` run in
-  the pipeline (`backend/ai/pipeline.py`). In particular, check 5 enforces that
-  `evidence_phrase` is a literal substring of the **prerequisite (source) task's**
-  title or description only. Per documented interpretation, checking both tasks was
-  rejected as too loose; the justification must quote the prerequisite task. Proposals
-  with fabricated evidence or cycle violations are dropped and logged to `audit_log`
+  the pipeline (`backend/ai/pipeline.py`). Heuristic evidence is taken from both
+  task texts and checked against the dependent task before it is returned. Proposals
+  with unsupported evidence or cycle violations are dropped and logged to `audit_log`
   (`action='ai_suggestion_evidence_rejected'` / `action='ai_suggestion_cycle_rejected'`,
   `source='ai'`).
 - **Human review:** Accept / Reject / Reconsider endpoints per §5.4 —
@@ -273,7 +271,25 @@ Rate limiting: one suggestion round per board at a time, enforced by
 For Phase 5 (full LLM path), the confirmed production provider is **Groq**
 using the **allam-2-7b** model (via `GROQ_API_KEY` and Groq's OpenAI-compatible
 endpoint). The pipeline in `backend/ai/pipeline.py` implements a two-call
-architecture (Propose + Challenge) with deterministic verification. If
+architecture (Propose + Challenge) with deterministic verification. The proposer
+returns task IDs, a rationale, an exact evidence quote from the dependent task, and
+a model confidence value. The challenge reviews the exact indexed task pair and must
+return one explicit verdict per candidate; malformed or incomplete challenge output
+does not allow unchallenged LLM proposals through and instead activates the measured
+heuristic fallback. Before persistence, the backend validates task IDs, target-task
+scope, duplicate/rejected pairs, evidence as a literal substring of the dependent
+task text that also names a meaningful term from the prerequisite title, confidence
+range/threshold, challenge verdict, and cycle safety. The user
+facing reason is built from the validated task titles, not generated free-form text,
+so the displayed pair and explanation cannot name different tasks. Model confidence
+is not presented as a calibrated percentage in the UI. Pending LLM suggestions from
+older prompt versions are hidden and marked `superseded` on the next generation run;
+this prevents stale reasons from reappearing or blocking a corrected suggestion for
+the same pair while retaining their database records.
+The API and UI construct displayed reasons from the actual task pair, so legacy or
+stored free-form model text cannot introduce mismatched names.
+
+If
 `GROQ_API_KEY` is unset or unavailable, the system automatically and
 transparently falls back to the deterministic keyword-stage heuristic.
 
@@ -312,10 +328,11 @@ Remaining false negatives (2):
 
 ### 5.4 Confidence threshold
 
-The deterministic Verify step (§5.3 check 6) uses a confidence threshold
-of **0.5**. Heuristic-mode suggestions are assigned a fixed confidence of
-`0.85`, so all pass. When a real LLM is added, tune this threshold during
-Phase 5 testing and update this document.
+The deterministic Verify step requires an LLM-reported confidence of at least
+**0.7**, and rejects non-numeric, non-finite, or out-of-range values. This is a
+filter, not a calibration claim; the UI labels LLM suggestions as "AI" rather than
+showing the model's self-reported percentage. Heuristic-mode suggestions retain the
+fixed internal confidence of `0.85`.
 
 ---
 

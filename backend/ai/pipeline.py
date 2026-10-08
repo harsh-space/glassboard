@@ -1,9 +1,13 @@
+import math
 import os
+import re
 import threading
 from typing import Any, Sequence
 from datetime import datetime
 
 from engine.graph import would_create_cycle
+
+LLM_PROMPT_VERSION = "groq-pair-grounded-v2"
 
 # In-memory board lock for rate limiting: no more than 1 in flight per board (BUILD_SPEC.md §5.6)
 _board_locks: set[int] = set()
@@ -56,6 +60,20 @@ def _get_stage(title: str, desc: str) -> int:
             if kw in d_lower:
                 return item["stage"]
     return 99
+
+
+def _evidence_supports_prerequisite(evidence: str, prerequisite_title: str) -> bool:
+    """Require the dependent-task quote to name a meaningful term from the proposed prerequisite."""
+    ignored_title_terms = {
+        "development", "implementation", "design", "setup", "preparation",
+        "prep", "task", "project", "work", "phase",
+    }
+    title_terms = {
+        term for term in re.findall(r"[a-z0-9]+", prerequisite_title.casefold())
+        if len(term) >= 4 or term in {"api", "ui"}
+    } - ignored_title_terms
+    evidence_terms = set(re.findall(r"[a-z0-9]+", evidence.casefold()))
+    return bool(title_terms & evidence_terms)
 
 
 def generate_heuristic_suggestions(
@@ -242,28 +260,30 @@ def run_ai_pipeline(
         if t.id not in already_linked_to_target
     ]
 
-    target_info = f"Focus on task ID {target_task_id}." if target_task_id else "Evaluate all tasks across the board."
+    target_info = (
+        f"Only propose dependencies whose dependent task_id is {target_task_id}."
+        if target_task_id
+        else "Evaluate all possible task pairs."
+    )
 
     # 1. PROPOSE CALL (BUILD_SPEC.md §5.1)
     propose_system = """You are TaskFlow Pro's dependency reasoning engine.
-Analyze the provided tasks and identify genuine finish-to-start dependencies (A must finish before B can start).
-Ordering logic strictly follows software delivery lifecycle: requirements/design -> backend/schema -> frontend/ui -> integration testing -> documentation -> deployment -> release.
-
-Worked Example 1:
-Task 2 'Database Schema Design' logically must precede Task 4 'Backend API Development' because endpoints depend on table definitions.
-Worked Example 2:
-Task 4 'Backend API Development' logically must precede Task 7 'Integration Testing' because test execution requires working API endpoints.
-
-If no clear prerequisite exists, return an empty list {"suggestions": []}.
+Propose only necessary finish-to-start dependencies: the prerequisite must finish before
+the dependent can start. Do not infer an edge merely from lifecycle order, shared topic,
+or a general best practice; tasks that can proceed in parallel are not dependencies.
+Use only the supplied task IDs. For each candidate, provide a short rationale and an
+exact, contiguous quote from the DEPENDENT task's title or description that supports
+why it relies on the prerequisite. If the task text does not support the relationship,
+do not propose it.
 Output MUST be strict JSON matching this schema:
 {
   "suggestions": [
     {
-      "prerequisite_id": 4,
-      "task_id": 7,
-      "reason": "Integration testing requires backend endpoints to be implemented first.",
-      "evidence_phrase": "backend api",
-      "confidence": 0.95
+      "prerequisite_id": 2,
+      "task_id": 4,
+      "rationale": "The API is built against the database schema.",
+      "evidence_phrase": "backed by the database schema",
+      "confidence": 0.82
     }
   ]
 }"""
@@ -271,14 +291,14 @@ Output MUST be strict JSON matching this schema:
     propose_user = f"""Tasks:
 {tasks_summary}
 
-Target instruction: {target_info}
-Existing dependencies: {list(edge_pairs)}
-Previously rejected dependencies: {list(rejected_pairs)}
+Target constraint: {target_info}
+Existing dependencies (prerequisite_id, task_id): {sorted(edge_pairs)}
+Previously rejected dependencies (prerequisite_id, task_id): {sorted(rejected_pairs)}
 
-Propose candidate dependencies."""
+Return only supported, non-duplicate candidate dependencies."""
 
     propose_data = _call_groq_chat(api_key, model_name, base_url, propose_system, propose_user)
-    if not propose_data or "suggestions" not in propose_data or not isinstance(propose_data["suggestions"], list):
+    if not isinstance(propose_data, dict) or not isinstance(propose_data.get("suggestions"), list):
         # Fall back to heuristic on failure/timeout
         return generate_heuristic_suggestions(all_tasks, existing_edges, rejected_pairs, target_task_id)
 
@@ -288,30 +308,86 @@ Propose candidate dependencies."""
 
     # 2. CHALLENGE CALL (BUILD_SPEC.md §5.2)
     challenge_system = """You are TaskFlow Pro's skeptical dependency critic.
-Examine each proposed dependency link and determine if it survived or should be rejected.
-Reject if:
-(a) The direction is reversed (dependent before prerequisite).
-(b) The link is only thematic/topical rather than an essential finish-to-start requirement.
-(c) The two tasks could comfortably run in parallel.
-
-Output JSON format:
+Judge each indexed candidate as presented. Do not change or reinterpret its task IDs.
+Mark it "survived" only when the provided task text supports a necessary finish-to-start
+relationship and the evidence quote supports that exact pair. Reject reversed, merely
+topical, speculative, or parallelizable relationships. Return exactly one verdict for
+every candidate index; if uncertain, reject.
+Output strict JSON:
 {
   "verdicts": [
-    {"index": 0, "verdict": "survived"|"rejected", "note": "explanation"}
+    {"index": 0, "verdict": "survived"}
   ]
 }"""
 
-    challenge_user = f"Candidate proposals to critique:\n{raw_proposals}"
+    challenge_candidates = []
+    for idx, prop in enumerate(raw_proposals):
+        if not isinstance(prop, dict):
+            continue
+        prereq_id = prop.get("prerequisite_id")
+        dep_id = prop.get("task_id")
+        if (
+            not isinstance(prereq_id, int)
+            or isinstance(prereq_id, bool)
+            or not isinstance(dep_id, int)
+            or isinstance(dep_id, bool)
+        ):
+            continue
+        prereq_task = task_map.get(prereq_id)
+        dep_task = task_map.get(dep_id)
+        if prereq_task is None or dep_task is None:
+            continue
+        challenge_candidates.append({
+            "index": idx,
+            "prerequisite": {
+                "id": prereq_task.id,
+                "title": prereq_task.title,
+                "description": prereq_task.description or "",
+            },
+            "dependent": {
+                "id": dep_task.id,
+                "title": dep_task.title,
+                "description": dep_task.description or "",
+            },
+            "rationale": prop.get("rationale", ""),
+            "evidence_quote": prop.get("evidence_phrase", ""),
+        })
+
+    challenge_user = f"Evaluate these exact indexed candidate pairs:\n{challenge_candidates}"
     challenge_data = _call_groq_chat(api_key, model_name, base_url, challenge_system, challenge_user)
 
+    verdicts = challenge_data.get("verdicts") if isinstance(challenge_data, dict) else None
+    if not isinstance(verdicts, list):
+        return generate_heuristic_suggestions(all_tasks, existing_edges, rejected_pairs, target_task_id)
+
     verdict_map: dict[int, str] = {}
-    if challenge_data and "verdicts" in challenge_data and isinstance(challenge_data["verdicts"], list):
-        for v in challenge_data["verdicts"]:
-            if isinstance(v, dict) and "index" in v and "verdict" in v:
-                verdict_map[v["index"]] = v["verdict"]
+    for verdict in verdicts:
+        if (
+            not isinstance(verdict, dict)
+            or not isinstance(verdict.get("index"), int)
+            or isinstance(verdict.get("index"), bool)
+            or verdict.get("verdict") not in ("survived", "rejected")
+            or verdict["index"] in verdict_map
+        ):
+            return generate_heuristic_suggestions(all_tasks, existing_edges, rejected_pairs, target_task_id)
+        verdict_map[verdict["index"]] = verdict["verdict"]
+
+    proposal_indices = {
+        idx for idx, prop in enumerate(raw_proposals)
+        if isinstance(prop, dict)
+        and isinstance(prop.get("prerequisite_id"), int)
+        and not isinstance(prop.get("prerequisite_id"), bool)
+        and isinstance(prop.get("task_id"), int)
+        and not isinstance(prop.get("task_id"), bool)
+        and prop.get("prerequisite_id") in task_map
+        and prop.get("task_id") in task_map
+    }
+    if set(verdict_map) != proposal_indices:
+        return generate_heuristic_suggestions(all_tasks, existing_edges, rejected_pairs, target_task_id)
 
     # 3. DETERMINISTIC VERIFICATION (BUILD_SPEC.md §5.3)
     surviving_suggestions: list[dict[str, Any]] = []
+    seen_pairs = set(edge_pairs)
 
     for idx, prop in enumerate(raw_proposals):
         if not isinstance(prop, dict):
@@ -319,9 +395,26 @@ Output JSON format:
 
         prereq_id = prop.get("prerequisite_id")
         dep_id = prop.get("task_id")
-        reason = prop.get("reason", "")
-        evidence = str(prop.get("evidence_phrase", ""))
-        confidence = float(prop.get("confidence", 0.0))
+        if (
+            not isinstance(prereq_id, int)
+            or isinstance(prereq_id, bool)
+            or not isinstance(dep_id, int)
+            or isinstance(dep_id, bool)
+        ):
+            continue
+        evidence = prop.get("evidence_phrase")
+        if not isinstance(evidence, str):
+            continue
+        evidence = evidence.strip()
+        rationale = prop.get("rationale")
+        if not isinstance(rationale, str) or not rationale.strip():
+            continue
+        raw_confidence = prop.get("confidence")
+        if isinstance(raw_confidence, bool) or not isinstance(raw_confidence, (int, float)):
+            continue
+        confidence = float(raw_confidence)
+        if not math.isfinite(confidence) or not 0.0 <= confidence <= 1.0:
+            continue
 
         # Check 1 & 2: ids exist on board
         if prereq_id not in task_map or dep_id not in task_map:
@@ -330,34 +423,37 @@ Output JSON format:
         # Check 3: prereq != task
         if prereq_id == dep_id:
             continue
+        if target_task_id is not None and dep_id != target_task_id:
+            continue
 
         # Check 4: not duplicate
         pair = (prereq_id, dep_id)
-        if pair in edge_pairs:
+        if pair in seen_pairs:
             continue
 
         # Check 5: not previously rejected
         if pair in rejected_pairs:
             continue
 
-        # Check challenge verdict
-        ch_verdict = verdict_map.get(idx, "not_run")
-        if ch_verdict == "rejected":
+        # A candidate must receive an explicit positive verdict from the challenge call.
+        ch_verdict = verdict_map.get(idx)
+        if ch_verdict != "survived":
             continue
 
-        # Check 6: evidence_phrase must be a literal substring of the PREREQUISITE
-        # task's title + description only (BUILD_SPEC.md §5.3, check 5).
-        # If the phrase is not found there, the justification is hallucinated — drop it.
-        # Checking both tasks would be looser than the spec: the reason is supposed to
-        # quote the prerequisite's text, not the dependent's (documented interpretation).
+        # The evidence must quote the dependent task: this is the task whose text must
+        # support why it relies on the proposed prerequisite.
         prereq_task = task_map[prereq_id]
         dep_task = task_map[dep_id]
-        prereq_text = f"{prereq_task.title} {prereq_task.description or ''}".lower()
-        if evidence.lower() not in prereq_text:
+        dep_text = f"{dep_task.title} {dep_task.description or ''}".casefold()
+        if (
+            not evidence
+            or evidence.casefold() not in dep_text
+            or not _evidence_supports_prerequisite(evidence, prereq_task.title)
+        ):
             # Log the rejection so it appears in the audit trail
             import logging
             logging.getLogger(__name__).info(
-                "ai_suggestion_evidence_rejected: prereq=%s dep=%s evidence=%r not in prereq text",
+                "ai_suggestion_evidence_rejected: prereq=%s dep=%s evidence=%r not in dependent text",
                 prereq_id, dep_id, evidence,
             )
             if db is not None:
@@ -375,8 +471,8 @@ Output JSON format:
                 )
             continue  # drop — do not append to surviving_suggestions
 
-        # Check 7: confidence threshold >= 0.5
-        if confidence < 0.5:
+        # Reject weak model proposals rather than presenting them as likely dependencies.
+        if confidence < 0.7:
             continue
 
         # Check 8: cycle detection
@@ -398,13 +494,14 @@ Output JSON format:
         surviving_suggestions.append({
             "task_id": dep_id,
             "prerequisite_id": prereq_id,
-            "reason": reason,
+            "reason": f"{prereq_task.title} may need to finish before {dep_task.title} starts.",
             "evidence_phrase": evidence,
             "proposer_confidence": confidence,
-            "challenge_verdict": ch_verdict if ch_verdict in ("survived", "contested", "rejected") else "not_run",
+            "challenge_verdict": ch_verdict,
             "status": "pending",
             "model_name": f"groq/{model_name}",
-            "prompt_version": "groq-allam-v1",
+            "prompt_version": LLM_PROMPT_VERSION,
         })
+        seen_pairs.add(pair)
 
     return surviving_suggestions

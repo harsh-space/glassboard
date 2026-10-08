@@ -391,8 +391,8 @@ One batched call per trigger (single task or whole board). System prompt
 must include:
 - The closed list of board tasks: `{id, title, description}` for every
   task on the board *except* ones already linked to the target.
-- The instruction that ordering logic favors design → build → test →
-  release patterns, with two worked examples embedded in the prompt.
+- The instruction not to infer dependency solely from a common lifecycle or
+  thematic similarity; a proposal must be a necessary finish-to-start link.
 - `temperature = 0`.
 - Explicit instruction: if no clear prerequisite exists, return an empty
   list — this is a valid and preferred answer.
@@ -400,8 +400,8 @@ must include:
 Required output JSON schema (strict, no prose outside the JSON):
 ```json
 {"suggestions": [
-  {"prerequisite_id": 4, "task_id": 7, "reason": "one sentence",
-   "evidence_phrase": "exact substring from the task's own text",
+  {"prerequisite_id": 4, "task_id": 7, "rationale": "one sentence",
+   "evidence_phrase": "exact substring from the dependent task's text",
    "confidence": 0.0}
 ]}
 ```
@@ -414,11 +414,11 @@ once. System prompt: for each proposed link, decide `survived` or
 this only a topical/thematic link rather than a true finish-to-start
 dependency, (c) could the two tasks run in parallel with no real
 ordering constraint. Output: `{"verdicts": [{"index": 0, "verdict":
-"survived"|"rejected", "note": "..."}]}`. Anything `rejected` here is
-dropped before the deterministic checks even run. If this call times out
-or fails to parse, do not drop the suggestions — mark
-`challenge_verdict='not_run'` and proceed to §5.3 unchallenged; the UI
-shows these without a contested/clean badge either way.
+"survived"|"rejected"}]}`. The challenge judges the exact indexed task pair,
+and must return one explicit verdict per candidate. Anything `rejected` is
+dropped before deterministic checks run. If this call times out, fails to
+parse, or returns an incomplete/invalid verdict set, do not pass unchallenged
+LLM proposals through; use the deterministic heuristic fallback instead.
 
 ### 5.3 Verify (deterministic, no LLM)
 
@@ -427,16 +427,13 @@ Run in this order, short-circuit on first failure per suggestion:
 2. `prerequisite_id` and `task_id` both exist on this board.
 3. `prerequisite_id != task_id`.
 4. Not a duplicate of an existing `dependency` row.
-5. `evidence_phrase` is a literal substring (case-insensitive) of the
-   source task's title or description. **Implementation note (confirmed
-   during build):** "source task" means the *prerequisite* task
-   specifically, not either task — the reason is supposed to quote what
-   the prerequisite actually is, and checking both tasks would let a
-   dependent's own description satisfy the check even when the claimed
-   prerequisite has nothing to do with the quoted phrase. See
-   `docs/ARCHITECTURE.md` §5 for the reasoning.
-6. `confidence >= 0.5` (tune during testing; document the chosen
-   threshold in `docs/ARCHITECTURE.md`).
+5. `evidence_phrase` is a non-empty literal substring (case-insensitive)
+   of the dependent task's title or description, and must include a
+   meaningful term from the proposed prerequisite's title; this prevents
+   a quote about a different task from being used to justify the pair.
+6. `confidence` is finite, within 0–1, and at least `0.7`. This is a
+   filtering threshold, not a calibrated probability; do not show the
+   model's self-reported percentage as a user-facing certainty.
 7. `would_create_cycle(prerequisite_id, task_id, existing_edges)` is
    `False`. If it would create a cycle, drop the suggestion **and** write
    an `audit_log` row (`action='ai_suggestion_cycle_dropped'`) — never
@@ -444,6 +441,8 @@ Run in this order, short-circuit on first failure per suggestion:
 
 Suggestions passing all seven are stored as `ai_suggestion` rows with
 `status='pending'`, `challenge_verdict` as set in §5.2.
+The displayed reason is rendered from the validated prerequisite/dependent
+titles, not copied from free-form model output or legacy stored text.
 
 ### 5.4 Human review
 
@@ -464,12 +463,13 @@ rejected candidates).
 
 Maintain a hand-labelled reference file (`tests/seed_dependency_labels.json`
 — the "true" dependency set for the seed board in §1) and a script
-(`scripts/measure_ai.py`) that runs the pipeline against the seed board and
+(`scripts/measure_ai.py`) that measures the deterministic heuristic fallback against the seed board and
 reports: true positives, false positives, false negatives, precision,
 recall, and acceptance rate (accepted / total shown). Reference targets:
-precision ≥ 0.85, recall ≥ 0.70. This script's output is what the
-synopsis's Section 5 metrics point to — run it and put the actual numbers
-in `docs/ARCHITECTURE.md`, don't leave the targets unverified.
+precision ≥ 0.85, recall ≥ 0.70. LLM proposals also require regression
+tests for malformed output, pair/reason consistency, evidence grounding,
+and challenge failure; the live provider is not called by the offline
+benchmark.
 
 ### 5.6 Failure handling
 
@@ -481,6 +481,9 @@ in `docs/ARCHITECTURE.md`, don't leave the targets unverified.
   task's title/description contains a later-keyword task's obvious
   reference). Mark these suggestions with `model_name='heuristic-fallback'`
   and show a "heuristic" badge in the UI instead of a confidence score.
+- On Challenge failure or malformed/incomplete verdicts, discard the
+  unverified LLM candidates and use the same deterministic heuristic
+  fallback. LLM suggestions must have an explicit `survived` verdict.
 - Rate limiting: no more than one Propose/Challenge round in flight per
   board at a time; queue or reject a second concurrent trigger with `429`.
 - The board and all non-AI functionality must work with the LLM API key

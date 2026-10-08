@@ -11,7 +11,13 @@ from backend.audit import log_invariant_gate_failure
 from engine.graph import would_create_cycle
 from engine.scheduler import recompute
 from engine.invariants import check_invariants
-from backend.ai.pipeline import BoardLockContext, BoardRateLimitError, generate_heuristic_suggestions, run_ai_pipeline
+from backend.ai.pipeline import (
+    LLM_PROMPT_VERSION,
+    BoardLockContext,
+    BoardRateLimitError,
+    generate_heuristic_suggestions,
+    run_ai_pipeline,
+)
 
 router = APIRouter(prefix="/dependencies", tags=["dependencies"])
 
@@ -31,6 +37,24 @@ def _resolve_board_for_task(task_id: int, db: Session) -> tuple:
         )
     board = db.query(Board).filter(Board.id == task.board_id).first()
     return task, board
+
+
+def _suggestion_response(suggestion: AISuggestion, tasks_by_id: dict[int, Task]) -> dict:
+    prerequisite = tasks_by_id.get(suggestion.prerequisite_id)
+    dependent = tasks_by_id.get(suggestion.task_id)
+    prerequisite_title = prerequisite.title if prerequisite else f"Task #{suggestion.prerequisite_id}"
+    dependent_title = dependent.title if dependent else f"Task #{suggestion.task_id}"
+    return {
+        "id": suggestion.id,
+        "task_id": suggestion.task_id,
+        "prerequisite_id": suggestion.prerequisite_id,
+        "reason": f"{prerequisite_title} may need to finish before {dependent_title} starts.",
+        "evidence_phrase": suggestion.evidence_phrase,
+        "proposer_confidence": suggestion.proposer_confidence,
+        "challenge_verdict": suggestion.challenge_verdict,
+        "status": suggestion.status,
+        "model_name": suggestion.model_name,
+    }
 
 
 @router.post("", response_model=dict, status_code=status.HTTP_201_CREATED)
@@ -238,23 +262,21 @@ def list_pending_suggestions(
     rows = (
         db.query(AISuggestion)
         .join(Task, Task.id == AISuggestion.task_id)
-        .filter(Task.board_id == board_id, AISuggestion.status == "pending")
+        .filter(
+            Task.board_id == board_id,
+            AISuggestion.status == "pending",
+            (
+                (AISuggestion.model_name == "heuristic-fallback")
+                | (AISuggestion.prompt_version == LLM_PROMPT_VERSION)
+            ),
+        )
         .all()
     )
-    return [
-        {
-            "id": s.id,
-            "task_id": s.task_id,
-            "prerequisite_id": s.prerequisite_id,
-            "reason": s.reason,
-            "evidence_phrase": s.evidence_phrase,
-            "proposer_confidence": s.proposer_confidence,
-            "challenge_verdict": s.challenge_verdict,
-            "status": s.status,
-            "model_name": s.model_name,
-        }
-        for s in rows
-    ]
+    tasks_by_id = {
+        task.id: task
+        for task in db.query(Task).filter(Task.board_id == board_id).all()
+    }
+    return [_suggestion_response(suggestion, tasks_by_id) for suggestion in rows]
 
 
 @router.get("/suggestions/rejected", response_model=list[dict])
@@ -278,20 +300,11 @@ def list_rejected_suggestions(
         .filter(Task.board_id == board_id, AISuggestion.status == "rejected")
         .all()
     )
-    return [
-        {
-            "id": s.id,
-            "task_id": s.task_id,
-            "prerequisite_id": s.prerequisite_id,
-            "reason": s.reason,
-            "evidence_phrase": s.evidence_phrase,
-            "proposer_confidence": s.proposer_confidence,
-            "challenge_verdict": s.challenge_verdict,
-            "status": s.status,
-            "model_name": s.model_name,
-        }
-        for s in rows
-    ]
+    tasks_by_id = {
+        task.id: task
+        for task in db.query(Task).filter(Task.board_id == board_id).all()
+    }
+    return [_suggestion_response(suggestion, tasks_by_id) for suggestion in rows]
 
 
 @router.post("/suggestions", response_model=list[dict])
@@ -315,6 +328,23 @@ def get_ai_suggestions(
             all_tasks = db.query(Task).filter(Task.board_id == payload.board_id).all()
             task_ids = [t.id for t in all_tasks]
             all_edges = db.query(Dependency).filter(Dependency.task_id.in_(task_ids)).all() if task_ids else []
+
+            # Old LLM suggestions may contain mismatched free-form reasons/evidence.
+            # Preserve them for audit/history, but don't display them or let them block
+            # a new suggestion for the same pair.
+            (
+                db.query(AISuggestion)
+                .filter(
+                    AISuggestion.task_id.in_(task_ids),
+                    AISuggestion.status == "pending",
+                    AISuggestion.model_name != "heuristic-fallback",
+                    AISuggestion.prompt_version != LLM_PROMPT_VERSION,
+                )
+                .update(
+                    {AISuggestion.status: "superseded"},
+                    synchronize_session=False,
+                )
+            )
 
             # Exclude pairs that were previously rejected on this board
             rejected_rows = (
@@ -368,23 +398,18 @@ def get_ai_suggestions(
             all_pending = (
                 db.query(AISuggestion)
                 .join(Task, Task.id == AISuggestion.task_id)
-                .filter(Task.board_id == payload.board_id, AISuggestion.status == "pending")
+                .filter(
+                    Task.board_id == payload.board_id,
+                    AISuggestion.status == "pending",
+                    (
+                        (AISuggestion.model_name == "heuristic-fallback")
+                        | (AISuggestion.prompt_version == LLM_PROMPT_VERSION)
+                    ),
+                )
                 .all()
             )
-            return [
-                {
-                    "id": s.id,
-                    "task_id": s.task_id,
-                    "prerequisite_id": s.prerequisite_id,
-                    "reason": s.reason,
-                    "evidence_phrase": s.evidence_phrase,
-                    "proposer_confidence": s.proposer_confidence,
-                    "challenge_verdict": s.challenge_verdict,
-                    "status": s.status,
-                    "model_name": s.model_name,
-                }
-                for s in all_pending
-            ]
+            tasks_by_id = {task.id: task for task in all_tasks}
+            return [_suggestion_response(suggestion, tasks_by_id) for suggestion in all_pending]
 
     except BoardRateLimitError as e:
         raise HTTPException(

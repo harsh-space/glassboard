@@ -45,7 +45,7 @@ class TestEvidenceCheckDropsBadProposals:
         fake_proposal = [{
             "prerequisite_id": 1,
             "task_id": 2,
-            "reason": "Prereq must finish before dep starts.",
+            "rationale": "The dependent task relies on the prerequisite.",
             "evidence_phrase": fabricated_evidence,
             "confidence": 0.9,
         }]
@@ -79,13 +79,14 @@ class TestEvidenceCheckDropsBadProposals:
         prereq = _make_task(1, "Requirements Gathering", "Collect stakeholder requirements.")
         dep = _make_task(2, "Backend API Development", "Build endpoints after requirements are done.")
 
-        # "requirements" is in prereq title — should survive
-        valid_evidence = "requirements"
+        valid_evidence = "after requirements are done"
 
         fake_proposal = [{
             "prerequisite_id": 1,
             "task_id": 2,
-            "reason": "API dev needs requirements first.",
+            # This inconsistent free-form reason must not be shown to the user.
+            "reason": "Frontend Implementation must precede API Documentation.",
+            "rationale": "The API work explicitly follows requirements.",
             "evidence_phrase": valid_evidence,
             "confidence": 0.9,
         }]
@@ -106,23 +107,27 @@ class TestEvidenceCheckDropsBadProposals:
 
         assert len(results) == 1, f"Expected 1 surviving suggestion, got: {results}"
         assert results[0]["evidence_phrase"] == valid_evidence
+        assert results[0]["reason"] == (
+            "Requirements Gathering may need to finish before Backend API Development starts."
+        )
+        assert results[0]["challenge_verdict"] == "survived"
 
-    def test_evidence_only_in_dep_text_not_in_prereq_is_dropped(self):
+    def test_evidence_only_in_prereq_text_not_in_dependent_is_dropped(self):
         """
-        Evidence found only in the DEPENDENT task's text but NOT in the
-        prerequisite's text must still be dropped (spec says prereq text only).
+        Evidence must be quoted from the dependent task, since its text should
+        support the proposed reliance on the prerequisite.
         """
         prereq = _make_task(1, "Schema Design", "Define the database tables.")
         dep = _make_task(2, "Frontend Implementation", "Build UI. Depends on api endpoints.")
 
-        # "api" appears in dep description but NOT in prereq — must be dropped
-        dep_only_evidence = "api"
+        # "database" occurs in prerequisite text but not dependent text.
+        prereq_only_evidence = "database"
 
         fake_proposal = [{
             "prerequisite_id": 1,
             "task_id": 2,
-            "reason": "Schema must exist before frontend.",
-            "evidence_phrase": dep_only_evidence,
+            "rationale": "The frontend needs the schema.",
+            "evidence_phrase": prereq_only_evidence,
             "confidence": 0.85,
         }]
         fake_challenge = {"verdicts": [{"index": 0, "verdict": "survived", "note": ""}]}
@@ -140,9 +145,35 @@ class TestEvidenceCheckDropsBadProposals:
                     target_task_id=None,
                 )
 
-        assert results == [], (
-            "Evidence found only in dep text should be dropped — prereq text check only."
+        assert results == [], "Evidence found only in prerequisite text must be dropped."
+
+    def test_evidence_about_another_task_does_not_support_proposed_pair(self):
+        """A valid quote from the dependent is insufficient if it names another prerequisite."""
+        requirements = _make_task(1, "Requirements Gathering", "Collect stakeholder requirements.")
+        backend = _make_task(
+            4,
+            "Backend API Development",
+            "Build REST endpoints backed by the database schema.",
         )
+        proposal = [{
+            "prerequisite_id": 1,
+            "task_id": 4,
+            "rationale": "Requirements must precede backend implementation.",
+            "evidence_phrase": "database schema",
+            "confidence": 0.95,
+        }]
+        challenge = {"verdicts": [{"index": 0, "verdict": "survived"}]}
+
+        with patch("backend.ai.pipeline._call_groq_chat") as mock_call:
+            mock_call.side_effect = [{"suggestions": proposal}, challenge]
+            with patch.dict("os.environ", {"GROQ_API_KEY": "fake-key-for-test"}):
+                results = run_ai_pipeline(
+                    all_tasks=[requirements, backend],
+                    existing_edges=[],
+                    rejected_pairs=set(),
+                )
+
+        assert results == []
 
     def test_hallucinated_evidence_drop_is_written_to_audit_log(self):
         """
@@ -159,7 +190,7 @@ class TestEvidenceCheckDropsBadProposals:
         fake_proposal = [{
             "prerequisite_id": 1,
             "task_id": 2,
-            "reason": "Needs requirements first.",
+            "rationale": "The dependency is explicit.",
             "evidence_phrase": "completely fabricated evidence phrase",
             "confidence": 0.9,
         }]
@@ -191,11 +222,10 @@ class TestEvidenceCheckDropsBadProposals:
         assert added_log.payload["task_id"] == 2
         assert added_log.payload["evidence_phrase"] == "completely fabricated evidence phrase"
 
-    def test_challenge_call_failure_results_in_not_run_verdict(self):
+    def test_challenge_call_failure_falls_back_to_heuristic(self):
         """
-        Issue 3: When the Challenge call fails or times out (_call_groq_chat returns None
-        for the challenge call), the resulting suggestion's challenge_verdict must be 'not_run',
-        never defaulting to 'survived'.
+        An LLM proposal must not be accepted without an explicit challenge verdict.
+        If the challenge call fails, use the deterministic fallback instead.
         """
         prereq = _make_task(1, "Requirements Gathering", "Collect stakeholder requirements.")
         dep = _make_task(2, "Backend API Development", "Build endpoints after requirements are done.")
@@ -203,7 +233,7 @@ class TestEvidenceCheckDropsBadProposals:
         fake_proposal = [{
             "prerequisite_id": 1,
             "task_id": 2,
-            "reason": "API dev needs requirements first.",
+            "rationale": "The dependent task explicitly refers to requirements.",
             "evidence_phrase": "requirements",
             "confidence": 0.9,
         }]
@@ -223,5 +253,42 @@ class TestEvidenceCheckDropsBadProposals:
                 )
 
         assert len(results) == 1
-        assert results[0]["challenge_verdict"] == "not_run"
+        assert results[0]["model_name"] == "heuristic-fallback"
+        assert results[0]["challenge_verdict"] == "survived"
 
+    def test_target_task_constraint_is_verified_server_side(self):
+        prereq = _make_task(1, "Requirements Gathering", "Collect stakeholder requirements.")
+        target = _make_task(2, "Backend API Development", "Build endpoints after requirements are done.")
+        unrelated = _make_task(3, "API Documentation", "Document completed endpoints.")
+        fake_proposals = [
+            {
+                "prerequisite_id": 1,
+                "task_id": 3,
+                "rationale": "The documentation follows requirements.",
+                "evidence_phrase": "Document completed endpoints",
+                "confidence": 0.9,
+            },
+            {
+                "prerequisite_id": 1,
+                "task_id": 2,
+                "rationale": "The API work follows requirements.",
+                "evidence_phrase": "after requirements are done",
+                "confidence": 0.9,
+            },
+        ]
+        challenge = {"verdicts": [
+            {"index": 0, "verdict": "survived"},
+            {"index": 1, "verdict": "survived"},
+        ]}
+
+        with patch("backend.ai.pipeline._call_groq_chat") as mock_call:
+            mock_call.side_effect = [{"suggestions": fake_proposals}, challenge]
+            with patch.dict("os.environ", {"GROQ_API_KEY": "fake-key-for-test"}):
+                results = run_ai_pipeline(
+                    all_tasks=[prereq, target, unrelated],
+                    existing_edges=[],
+                    rejected_pairs=set(),
+                    target_task_id=2,
+                )
+
+        assert [(item["prerequisite_id"], item["task_id"]) for item in results] == [(1, 2)]
